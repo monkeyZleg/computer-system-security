@@ -4,7 +4,8 @@ import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import { Link, useNavigate } from 'react-router-dom'
 import toast from 'react-hot-toast'
-import { supabase } from '../lib/supabase'
+import { useAuth } from '../context/AuthContext'
+import * as patientsApi from '../api/patients'
 
 const schema = z.object({
   full_name: z.string().min(2, 'Name must be at least 2 characters').max(100),
@@ -16,6 +17,7 @@ const schema = z.object({
 
 export default function Register() {
   const navigate = useNavigate()
+  const { signUp } = useAuth()
   const [loading, setLoading] = useState(false)
 
   const { register, handleSubmit, formState: { errors } } = useForm({
@@ -24,46 +26,26 @@ export default function Register() {
 
   async function onSubmit(data) {
     setLoading(true)
+    try {
+      const newUser = await signUp({
+        full_name: data.full_name,
+        email: data.email,
+        password: data.password,
+        phone_number: data.phone_number || null,
+      })
 
-    const { data: authData, error: signUpError } = await supabase.auth.signUp({
-      email: data.email,
-      password: data.password,
-    })
+      await patientsApi.createPatientRecord({
+        user_id: newUser.id,
+        date_of_birth: data.date_of_birth,
+      })
 
-    if (signUpError) {
+      toast.success('Account created! You can now sign in.')
+      navigate('/login')
+    } catch (err) {
+      toast.error(err?.message?.includes('duplicate') ? 'An account with this email already exists.' : 'Registration failed. Please try again.')
+    } finally {
       setLoading(false)
-      toast.error('Registration failed. Please try again.')
-      return
     }
-
-    const userId = authData.user?.id
-    if (!userId) {
-      setLoading(false)
-      toast.error('Something went wrong. Please try again.')
-      return
-    }
-
-    const { error: profileError } = await supabase.from('profiles').insert({
-      id: userId,
-      full_name: data.full_name,
-      role: 'patient',
-      phone_number: data.phone_number || null,
-    })
-
-    if (profileError) {
-      setLoading(false)
-      toast.error('Something went wrong. Please try again.')
-      return
-    }
-
-    await supabase.from('patients').insert({
-      profile_id: userId,
-      date_of_birth: data.date_of_birth,
-    })
-
-    setLoading(false)
-    toast.success('Account created! Please check your email to verify.')
-    navigate('/login')
   }
 
   return (

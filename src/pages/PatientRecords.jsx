@@ -4,7 +4,8 @@ import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import toast from 'react-hot-toast'
-import { supabase } from '../lib/supabase'
+import * as patientsApi from '../api/patients'
+import { queryKeys } from '../api/queryKeys'
 import { useAuth } from '../context/AuthContext'
 
 const updateSchema = z.object({
@@ -25,16 +26,10 @@ function PatientDetail({ patient, onClose, canEdit }) {
   })
 
   const { mutate, isPending } = useMutation({
-    mutationFn: async (data) => {
-      const { error } = await supabase
-        .from('patients')
-        .update({ ...data, updated_at: new Date().toISOString() })
-        .eq('id', patient.id)
-      if (error) throw error
-    },
+    mutationFn: (data) => patientsApi.updatePatientRecord(patient.id, data),
     onSuccess: () => {
       toast.success('Record updated')
-      qc.invalidateQueries({ queryKey: ['patients'] })
+      qc.invalidateQueries({ queryKey: queryKeys.patients })
       qc.invalidateQueries({ queryKey: ['patient-self'] })
       onClose()
     },
@@ -51,9 +46,9 @@ function PatientDetail({ patient, onClose, canEdit }) {
           </div>
 
           <div className="mb-4 p-3 bg-gray-50 rounded-lg text-sm">
-            <p className="font-medium text-gray-800">{patient.profiles?.full_name}</p>
+            <p className="font-medium text-gray-800">{patient.users?.full_name}</p>
             <p className="text-gray-500">DOB: {patient.date_of_birth ?? '—'}</p>
-            <p className="text-gray-500">Phone: {patient.profiles?.phone_number ?? '—'}</p>
+            <p className="text-gray-500">Phone: {patient.users?.phone_number ?? '—'}</p>
           </div>
 
           <form onSubmit={handleSubmit(mutate)} className="space-y-4">
@@ -94,26 +89,16 @@ function StaffRecordsView() {
   const { profile } = useAuth()
 
   const { data: patients, isLoading } = useQuery({
-    queryKey: ['patients'],
-    queryFn: async () => {
-      const { data } = await supabase
-        .from('patients')
-        .select('id, date_of_birth, profiles!profile_id(full_name, phone_number)')
-        .order('created_at', { ascending: false })
-      return data ?? []
-    },
+    queryKey: queryKeys.patients,
+    queryFn: patientsApi.listPatients,
   })
 
   const filtered = patients?.filter(p =>
-    p.profiles?.full_name?.toLowerCase().includes(search.toLowerCase())
+    p.users?.full_name?.toLowerCase().includes(search.toLowerCase())
   )
 
   async function loadFull(patientId) {
-    const { data } = await supabase
-      .from('patients')
-      .select('id, date_of_birth, home_address, diagnosis, medical_history, profiles!profile_id(full_name, phone_number)')
-      .eq('id', patientId)
-      .single()
+    const data = await patientsApi.getPatientById(patientId)
     setSelected(data)
   }
 
@@ -148,9 +133,9 @@ function StaffRecordsView() {
             <tbody className="divide-y divide-gray-50">
               {filtered?.map(p => (
                 <tr key={p.id} className="hover:bg-gray-50 transition-colors">
-                  <td className="px-4 py-3 font-medium text-gray-800">{p.profiles?.full_name}</td>
+                  <td className="px-4 py-3 font-medium text-gray-800">{p.users?.full_name}</td>
                   <td className="px-4 py-3 text-gray-500">{p.date_of_birth ?? '—'}</td>
-                  <td className="px-4 py-3 text-gray-500">{p.profiles?.phone_number ?? '—'}</td>
+                  <td className="px-4 py-3 text-gray-500">{p.users?.phone_number ?? '—'}</td>
                   <td className="px-4 py-3 text-right">
                     <button onClick={() => loadFull(p.id)} className="text-brand-600 hover:underline text-xs font-medium">
                       View
@@ -182,15 +167,8 @@ function PatientSelfView() {
   const [editing, setEditing] = useState(false)
 
   const { data: patient, isLoading } = useQuery({
-    queryKey: ['patient-self', session.user.id],
-    queryFn: async () => {
-      const { data } = await supabase
-        .from('patients')
-        .select('id, date_of_birth, home_address, diagnosis, medical_history, insurance_id, profiles!profile_id(full_name, phone_number)')
-        .eq('profile_id', session.user.id)
-        .single()
-      return data
-    },
+    queryKey: queryKeys.patientSelf(session.user.id),
+    queryFn: () => patientsApi.getPatientByUserId(session.user.id),
   })
 
   if (isLoading) return <div className="flex items-center justify-center h-32"><div className="animate-spin rounded-full h-6 w-6 border-b-2 border-brand-600" /></div>
@@ -202,7 +180,7 @@ function PatientSelfView() {
         <div className="grid grid-cols-2 gap-4 text-sm">
           <div>
             <p className="text-gray-500 text-xs uppercase tracking-wide">Full Name</p>
-            <p className="font-medium text-gray-800 mt-1">{patient.profiles?.full_name}</p>
+            <p className="font-medium text-gray-800 mt-1">{patient.users?.full_name}</p>
           </div>
           <div>
             <p className="text-gray-500 text-xs uppercase tracking-wide">Date of Birth</p>
@@ -210,7 +188,7 @@ function PatientSelfView() {
           </div>
           <div>
             <p className="text-gray-500 text-xs uppercase tracking-wide">Phone Number</p>
-            <p className="font-medium text-gray-800 mt-1">{patient.profiles?.phone_number ?? '—'}</p>
+            <p className="font-medium text-gray-800 mt-1">{patient.users?.phone_number ?? '—'}</p>
           </div>
           <div>
             <p className="text-gray-500 text-xs uppercase tracking-wide">Insurance ID</p>

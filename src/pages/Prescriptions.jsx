@@ -4,7 +4,9 @@ import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import toast from 'react-hot-toast'
-import { supabase } from '../lib/supabase'
+import * as patientsApi from '../api/patients'
+import * as prescriptionsApi from '../api/prescriptions'
+import { queryKeys } from '../api/queryKeys'
 import { useAuth } from '../context/AuthContext'
 
 const prescribeSchema = z.object({
@@ -29,32 +31,25 @@ function IssueModal({ doctorId, onClose }) {
 
   async function searchPatients(query) {
     if (!query || query.length < 2) return
-    const { data } = await supabase
-      .from('patients')
-      .select('id, profiles!profile_id(full_name)')
-      .ilike('profiles.full_name', `%${query}%`)
-      .limit(5)
+    const data = await patientsApi.searchPatientsByName(query)
     setPatientResults(data ?? [])
   }
 
   function pickPatient(p) {
     setSelectedPatient(p)
     setValue('patient_id', p.id)
-    setValue('patient_search', p.profiles?.full_name)
+    setValue('patient_search', p.users?.full_name)
     setPatientResults([])
   }
 
   const { mutate, isPending } = useMutation({
-    mutationFn: async (data) => {
-      const { error } = await supabase.from('prescriptions').insert({
-        patient_id: data.patient_id,
-        doctor_id: doctorId,
-        medication: data.medication,
-        dosage: data.dosage,
-        issue_date: data.issue_date,
-      })
-      if (error) throw error
-    },
+    mutationFn: (data) => prescriptionsApi.issuePrescription({
+      patient_id: data.patient_id,
+      doctor_id: doctorId,
+      medication: data.medication,
+      dosage: data.dosage,
+      issue_date: data.issue_date,
+    }),
     onSuccess: () => {
       toast.success('Prescription issued!')
       qc.invalidateQueries({ queryKey: ['prescriptions'] })
@@ -96,13 +91,13 @@ function IssueModal({ doctorId, onClose }) {
                       onClick={() => pickPatient(p)}
                       className="px-3 py-2 text-sm hover:bg-brand-50 cursor-pointer text-gray-800"
                     >
-                      {p.profiles?.full_name}
+                      {p.users?.full_name}
                     </li>
                   ))}
                 </ul>
               )}
               {selectedPatient && (
-                <p className="text-xs text-green-600 mt-1">✓ Selected: {selectedPatient.profiles?.full_name}</p>
+                <p className="text-xs text-green-600 mt-1">✓ Selected: {selectedPatient.users?.full_name}</p>
               )}
             </div>
 
@@ -144,36 +139,19 @@ export default function Prescriptions() {
   const isDoctor = profile?.role === 'doctor'
 
   const { data: patientRecord } = useQuery({
-    queryKey: ['patient-self', session?.user.id],
+    queryKey: queryKeys.patientSelfId(session?.user.id),
     enabled: isPatient,
-    queryFn: async () => {
-      const { data } = await supabase
-        .from('patients')
-        .select('id')
-        .eq('profile_id', session.user.id)
-        .single()
-      return data
-    },
+    queryFn: () => patientsApi.getPatientIdByUserId(session.user.id),
   })
 
   const { data: prescriptions, isLoading } = useQuery({
-    queryKey: ['prescriptions', profile?.role, session?.user.id],
+    queryKey: queryKeys.prescriptions(profile?.role, session?.user.id),
     enabled: !!profile,
-    queryFn: async () => {
-      let query = supabase
-        .from('prescriptions')
-        .select('id, medication, dosage, issue_date, patients!patient_id(profiles!profile_id(full_name)), profiles!doctor_id(full_name)')
-        .order('issue_date', { ascending: false })
-
-      if (isPatient && patientRecord?.id) {
-        query = query.eq('patient_id', patientRecord.id)
-      } else if (isDoctor) {
-        query = query.eq('doctor_id', session.user.id)
-      }
-
-      const { data } = await query
-      return data ?? []
-    },
+    queryFn: () => prescriptionsApi.listPrescriptions({
+      role: profile.role,
+      userId: session.user.id,
+      patientId: patientRecord?.id,
+    }),
   })
 
   return (
@@ -205,14 +183,14 @@ export default function Prescriptions() {
                   <p className="font-semibold text-gray-800">{rx.medication}</p>
                   {!isPatient && (
                     <p className="text-xs text-gray-500 mt-0.5">
-                      Patient: {rx.patients?.profiles?.full_name ?? '—'}
+                      Patient: {rx.patients?.users?.full_name ?? '—'}
                     </p>
                   )}
                 </div>
                 <span className="badge bg-green-100 text-green-800 text-xs">{rx.issue_date}</span>
               </div>
               <p className="text-sm text-gray-600">{rx.dosage}</p>
-              <p className="text-xs text-gray-400 mt-2">Issued by Dr. {rx.profiles?.full_name ?? '—'}</p>
+              <p className="text-xs text-gray-400 mt-2">Issued by Dr. {rx.users?.full_name ?? '—'}</p>
             </div>
           ))}
           {prescriptions?.length === 0 && (

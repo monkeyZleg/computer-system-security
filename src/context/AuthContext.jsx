@@ -1,44 +1,54 @@
-import { createContext, useContext, useEffect, useState } from 'react'
-import { supabase } from '../lib/supabase'
+import { createContext, useContext, useState } from 'react'
+import * as authApi from '../api/auth'
+import * as usersApi from '../api/users'
 
 const AuthContext = createContext(null)
+const STORAGE_KEY = 'hpms.auth'
+
+function readStored() {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY)
+    return raw ? JSON.parse(raw) : null
+  } catch {
+    return null
+  }
+}
 
 export function AuthProvider({ children }) {
-  const [session, setSession] = useState(undefined) // undefined = loading
-  const [profile, setProfile] = useState(null)
+  const [profile, setProfile] = useState(() => readStored())
 
-  useEffect(() => {
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setSession(session)
-      if (session) fetchProfile(session.user.id)
-    })
+  function persist(user) {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(user))
+    setProfile(user)
+  }
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      setSession(session)
-      if (session) fetchProfile(session.user.id)
-      else setProfile(null)
-    })
+  async function signIn(email, password) {
+    const user = await authApi.signIn({ email, password })
+    persist(user)
+    return user
+  }
 
-    return () => subscription.unsubscribe()
-  }, [])
-
-  async function fetchProfile(userId) {
-    const { data } = await supabase
-      .from('profiles')
-      .select('id, full_name, role, phone_number')
-      .eq('id', userId)
-      .single()
-    setProfile(data)
+  async function signUp(fields) {
+    return authApi.signUp(fields)
   }
 
   async function signOut() {
-    await supabase.auth.signOut()
+    localStorage.removeItem(STORAGE_KEY)
+    setProfile(null)
   }
 
-  const loading = session === undefined
+  async function refetchProfile() {
+    if (!profile) return
+    const users = await usersApi.listUsers()
+    const fresh = users.find(u => u.id === profile.id)
+    if (fresh) persist(fresh)
+  }
+
+  const session = profile ? { user: { id: profile.id } } : null
+  const loading = false
 
   return (
-    <AuthContext.Provider value={{ session, profile, loading, signOut, refetchProfile: () => session && fetchProfile(session.user.id) }}>
+    <AuthContext.Provider value={{ session, profile, loading, signIn, signUp, signOut, refetchProfile }}>
       {children}
     </AuthContext.Provider>
   )

@@ -1,5 +1,9 @@
 import { useQuery } from '@tanstack/react-query'
-import { supabase } from '../lib/supabase'
+import * as usersApi from '../api/users'
+import * as patientsApi from '../api/patients'
+import * as appointmentsApi from '../api/appointments'
+import * as prescriptionsApi from '../api/prescriptions'
+import { queryKeys } from '../api/queryKeys'
 import { useAuth } from '../context/AuthContext'
 
 function StatCard({ label, value, icon, color = 'blue' }) {
@@ -22,45 +26,20 @@ function StatCard({ label, value, icon, color = 'blue' }) {
 
 function PatientDashboard({ userId }) {
   const { data: patient } = useQuery({
-    queryKey: ['patient-self', userId],
-    queryFn: async () => {
-      const { data } = await supabase
-        .from('patients')
-        .select('id')
-        .eq('profile_id', userId)
-        .single()
-      return data
-    },
+    queryKey: queryKeys.patientSelfId(userId),
+    queryFn: () => patientsApi.getPatientIdByUserId(userId),
   })
 
   const { data: appointments } = useQuery({
-    queryKey: ['my-appointments', patient?.id],
+    queryKey: queryKeys.myAppointments(patient?.id),
     enabled: !!patient?.id,
-    queryFn: async () => {
-      const { data } = await supabase
-        .from('appointments')
-        .select('id, appointment_date, status, profiles!doctor_id(full_name)')
-        .eq('patient_id', patient.id)
-        .eq('status', 'scheduled')
-        .gte('appointment_date', new Date().toISOString())
-        .order('appointment_date', { ascending: true })
-        .limit(5)
-      return data ?? []
-    },
+    queryFn: () => appointmentsApi.getUpcomingAppointmentsForPatient(patient.id),
   })
 
   const { data: prescriptions } = useQuery({
-    queryKey: ['my-prescriptions', patient?.id],
+    queryKey: queryKeys.myPrescriptions(patient?.id),
     enabled: !!patient?.id,
-    queryFn: async () => {
-      const { data } = await supabase
-        .from('prescriptions')
-        .select('id, medication, dosage, issue_date')
-        .eq('patient_id', patient.id)
-        .order('issue_date', { ascending: false })
-        .limit(5)
-      return data ?? []
-    },
+    queryFn: () => prescriptionsApi.getRecentPrescriptionsForPatient(patient.id),
   })
 
   return (
@@ -78,7 +57,7 @@ function PatientDashboard({ userId }) {
             {appointments?.map(apt => (
               <li key={apt.id} className="flex items-center justify-between text-sm">
                 <div>
-                  <p className="font-medium text-gray-800">{apt.profiles?.full_name ?? 'Doctor'}</p>
+                  <p className="font-medium text-gray-800">{apt.users?.full_name ?? 'Doctor'}</p>
                   <p className="text-gray-500">{new Date(apt.appointment_date).toLocaleString()}</p>
                 </div>
                 <span className="badge bg-blue-100 text-blue-800 capitalize">{apt.status}</span>
@@ -106,28 +85,13 @@ function PatientDashboard({ userId }) {
 
 function DoctorDashboard({ userId }) {
   const { data: todayApts } = useQuery({
-    queryKey: ['doctor-today', userId],
-    queryFn: async () => {
-      const today = new Date()
-      const start = new Date(today.setHours(0, 0, 0, 0)).toISOString()
-      const end = new Date(today.setHours(23, 59, 59, 999)).toISOString()
-      const { data } = await supabase
-        .from('appointments')
-        .select('id, appointment_date, status, patients!patient_id(profiles!profile_id(full_name))')
-        .eq('doctor_id', userId)
-        .gte('appointment_date', start)
-        .lte('appointment_date', end)
-        .order('appointment_date', { ascending: true })
-      return data ?? []
-    },
+    queryKey: queryKeys.doctorToday(userId),
+    queryFn: () => appointmentsApi.getTodayAppointmentsForDoctor(userId),
   })
 
   const { data: totalPatients } = useQuery({
-    queryKey: ['doctor-patients-count'],
-    queryFn: async () => {
-      const { count } = await supabase.from('patients').select('id', { count: 'exact', head: true })
-      return count
-    },
+    queryKey: queryKeys.doctorPatientsCount,
+    queryFn: patientsApi.countPatients,
   })
 
   return (
@@ -145,7 +109,7 @@ function DoctorDashboard({ userId }) {
             <li key={apt.id} className="py-3 flex items-center justify-between text-sm">
               <div>
                 <p className="font-medium text-gray-800">
-                  {apt.patients?.profiles?.full_name ?? 'Patient'}
+                  {apt.patients?.users?.full_name ?? 'Patient'}
                 </p>
                 <p className="text-gray-500">{new Date(apt.appointment_date).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</p>
               </div>
@@ -162,18 +126,14 @@ function DoctorDashboard({ userId }) {
 
 function AdminDashboard() {
   const { data: counts } = useQuery({
-    queryKey: ['admin-counts'],
+    queryKey: queryKeys.adminCounts,
     queryFn: async () => {
-      const [patients, doctors, appointments] = await Promise.all([
-        supabase.from('patients').select('id', { count: 'exact', head: true }),
-        supabase.from('profiles').select('id', { count: 'exact', head: true }).in('role', ['doctor', 'nurse']),
-        supabase.from('appointments').select('id', { count: 'exact', head: true }).eq('status', 'scheduled'),
+      const [patients, staff, appointments] = await Promise.all([
+        patientsApi.countPatients(),
+        usersApi.countStaff(),
+        appointmentsApi.countScheduledAppointments(),
       ])
-      return {
-        patients: patients.count,
-        staff: doctors.count,
-        appointments: appointments.count,
-      }
+      return { patients, staff, appointments }
     },
   })
 

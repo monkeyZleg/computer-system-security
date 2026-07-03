@@ -1,0 +1,14 @@
+export const queryKeys = {
+  users: ['users'],
+  doctorsList: ['doctors-list'],
+  patients: ['patients'],
+  patientSelf: (userId) => ['patient-self', userId],
+  patientSelfId: (userId) => ['patient-self-id', userId],
+  appointments: (role, userId) => ['appointments', role, userId],
+  prescriptions: (role, userId) => ['prescriptions', role, userId],
+  myAppointments: (patientId) => ['my-appointments', patientId],
+  myPrescriptions: (patientId) => ['my-prescriptions', patientId],
+  doctorToday: (userId) => ['doctor-today', userId],
+  doctorPatientsCount: ['doctor-patients-count'],
+  adminCounts: ['admin-counts'],
+}

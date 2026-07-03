@@ -1,7 +1,8 @@
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import toast from 'react-hot-toast'
-import { supabase } from '../lib/supabase'
+import * as usersApi from '../api/users'
+import { queryKeys } from '../api/queryKeys'
 import { useAuth } from '../context/AuthContext'
 import RoleGuard from '../components/RoleGuard'
 
@@ -25,30 +26,22 @@ function CreateStaffModal({ onClose }) {
     }
     setLoading(true)
 
-    const { data: authData, error: signUpError } = await supabase.auth.admin
-      ? { error: new Error('Admin signup requires service role key') }
-      : await supabase.auth.signUp({ email: form.email, password: form.password })
-
-    if (signUpError) {
-      setLoading(false)
-      toast.error('Could not create account. Use Supabase dashboard to create staff accounts.')
-      return
-    }
-
-    const userId = authData?.user?.id
-    if (userId) {
-      await supabase.from('profiles').insert({
-        id: userId,
+    try {
+      await usersApi.createStaffUser({
         full_name: form.full_name,
+        email: form.email,
+        password: form.password,
         role: form.role,
         phone_number: form.phone_number || null,
       })
+      toast.success('Staff account created.')
+      qc.invalidateQueries({ queryKey: queryKeys.users })
+      onClose()
+    } catch (err) {
+      toast.error(err?.message?.includes('duplicate') ? 'An account with this email already exists.' : 'Could not create account.')
+    } finally {
+      setLoading(false)
     }
-
-    setLoading(false)
-    toast.success('Staff account created. They must verify their email.')
-    qc.invalidateQueries({ queryKey: ['all-profiles'] })
-    onClose()
   }
 
   return (
@@ -104,24 +97,15 @@ export default function Admin() {
   const [search, setSearch] = useState('')
 
   const { data: profiles, isLoading } = useQuery({
-    queryKey: ['all-profiles'],
-    queryFn: async () => {
-      const { data } = await supabase
-        .from('profiles')
-        .select('id, full_name, role, phone_number, created_at')
-        .order('created_at', { ascending: false })
-      return data ?? []
-    },
+    queryKey: queryKeys.users,
+    queryFn: usersApi.listUsers,
   })
 
   const { mutate: changeRole } = useMutation({
-    mutationFn: async ({ id, role }) => {
-      const { error } = await supabase.from('profiles').update({ role }).eq('id', id)
-      if (error) throw error
-    },
+    mutationFn: ({ id, role }) => usersApi.updateUserRole(id, role),
     onSuccess: () => {
       toast.success('Role updated')
-      qc.invalidateQueries({ queryKey: ['all-profiles'] })
+      qc.invalidateQueries({ queryKey: queryKeys.users })
     },
     onError: () => toast.error('Failed to update role.'),
   })

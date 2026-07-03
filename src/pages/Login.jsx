@@ -4,7 +4,7 @@ import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import { Link, useNavigate } from 'react-router-dom'
 import toast from 'react-hot-toast'
-import { supabase } from '../lib/supabase'
+import { useAuth } from '../context/AuthContext'
 
 const schema = z.object({
   email: z.string().email('Enter a valid email address'),
@@ -13,6 +13,7 @@ const schema = z.object({
 
 export default function Login() {
   const navigate = useNavigate()
+  const { signIn } = useAuth()
   const [loading, setLoading] = useState(false)
 
   const { register, handleSubmit, formState: { errors } } = useForm({
@@ -21,19 +22,15 @@ export default function Login() {
 
   async function onSubmit(data) {
     setLoading(true)
-    const { error } = await supabase.auth.signInWithPassword({
-      email: data.email,
-      password: data.password,
-    })
-    setLoading(false)
-
-    if (error) {
+    try {
+      await signIn(data.email, data.password)
+      toast.success('Welcome back!')
+      navigate('/dashboard')
+    } catch {
       toast.error('Invalid email or password.')
-      return
+    } finally {
+      setLoading(false)
     }
-
-    toast.success('Welcome back!')
-    navigate('/dashboard')
   }
 
   return (

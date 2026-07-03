@@ -4,7 +4,10 @@ import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import toast from 'react-hot-toast'
-import { supabase } from '../lib/supabase'
+import * as usersApi from '../api/users'
+import * as patientsApi from '../api/patients'
+import * as appointmentsApi from '../api/appointments'
+import { queryKeys } from '../api/queryKeys'
 import { useAuth } from '../context/AuthContext'
 
 const bookSchema = z.object({
@@ -26,28 +29,17 @@ function BookModal({ patientId, onClose }) {
   })
 
   const { data: doctors } = useQuery({
-    queryKey: ['doctors-list'],
-    queryFn: async () => {
-      const { data } = await supabase
-        .from('profiles')
-        .select('id, full_name')
-        .in('role', ['doctor'])
-        .order('full_name')
-      return data ?? []
-    },
+    queryKey: queryKeys.doctorsList,
+    queryFn: usersApi.listDoctors,
   })
 
   const { mutate, isPending } = useMutation({
-    mutationFn: async (data) => {
-      const { error } = await supabase.from('appointments').insert({
-        patient_id: patientId,
-        doctor_id: data.doctor_id,
-        appointment_date: new Date(data.appointment_date).toISOString(),
-        notes: data.notes || null,
-        status: 'scheduled',
-      })
-      if (error) throw error
-    },
+    mutationFn: (data) => appointmentsApi.bookAppointment({
+      patient_id: patientId,
+      doctor_id: data.doctor_id,
+      appointment_date: data.appointment_date,
+      notes: data.notes,
+    }),
     onSuccess: () => {
       toast.success('Appointment booked!')
       qc.invalidateQueries({ queryKey: ['appointments'] })
@@ -114,46 +106,23 @@ export default function Appointments() {
   const isPatient = profile?.role === 'patient'
 
   const { data: patientRecord } = useQuery({
-    queryKey: ['patient-self', session?.user.id],
+    queryKey: queryKeys.patientSelfId(session?.user.id),
     enabled: isPatient,
-    queryFn: async () => {
-      const { data } = await supabase
-        .from('patients')
-        .select('id')
-        .eq('profile_id', session.user.id)
-        .single()
-      return data
-    },
+    queryFn: () => patientsApi.getPatientIdByUserId(session.user.id),
   })
 
   const { data: appointments, isLoading } = useQuery({
-    queryKey: ['appointments', profile?.role, session?.user.id],
+    queryKey: queryKeys.appointments(profile?.role, session?.user.id),
     enabled: !!profile,
-    queryFn: async () => {
-      let query = supabase
-        .from('appointments')
-        .select('id, appointment_date, status, notes, patients!patient_id(id, profiles!profile_id(full_name)), profiles!doctor_id(full_name)')
-        .order('appointment_date', { ascending: false })
-
-      if (profile.role === 'patient' && patientRecord?.id) {
-        query = query.eq('patient_id', patientRecord.id)
-      } else if (profile.role === 'doctor') {
-        query = query.eq('doctor_id', session.user.id)
-      }
-
-      const { data } = await query
-      return data ?? []
-    },
+    queryFn: () => appointmentsApi.listAppointments({
+      role: profile.role,
+      userId: session.user.id,
+      patientId: patientRecord?.id,
+    }),
   })
 
   const { mutate: updateStatus } = useMutation({
-    mutationFn: async ({ id, status }) => {
-      const { error } = await supabase
-        .from('appointments')
-        .update({ status })
-        .eq('id', id)
-      if (error) throw error
-    },
+    mutationFn: ({ id, status }) => appointmentsApi.updateAppointmentStatus(id, status),
     onSuccess: () => {
       toast.success('Appointment updated')
       qc.invalidateQueries({ queryKey: ['appointments'] })
@@ -204,10 +173,10 @@ export default function Appointments() {
                 <tr key={apt.id} className="hover:bg-gray-50 transition-colors">
                   {!isPatient && (
                     <td className="px-4 py-3 font-medium text-gray-800">
-                      {apt.patients?.profiles?.full_name ?? '—'}
+                      {apt.patients?.users?.full_name ?? '—'}
                     </td>
                   )}
-                  <td className="px-4 py-3 text-gray-700">{apt.profiles?.full_name ?? '—'}</td>
+                  <td className="px-4 py-3 text-gray-700">{apt.users?.full_name ?? '—'}</td>
                   <td className="px-4 py-3 text-gray-500">
                     {new Date(apt.appointment_date).toLocaleString()}
                   </td>
