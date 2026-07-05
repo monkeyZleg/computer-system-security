@@ -8,6 +8,7 @@ import Login from './pages/Login'
 import Register from './pages/Register'
 import Dashboard from './pages/Dashboard'
 import PatientRecords from './pages/PatientRecords'
+import PatientRecordDetail from './pages/PatientRecordDetail'
 import Appointments from './pages/Appointments'
 import Prescriptions from './pages/Prescriptions'
 import Admin from './pages/Admin'
@@ -44,6 +45,7 @@ export default function App() {
         <Route element={<AppLayout />}>
           <Route path="/dashboard" element={<Dashboard />} />
           <Route path="/records" element={<PatientRecords />} />
+          <Route path="/records/:id" element={<PatientRecordDetail />} />
           <Route path="/appointments" element={<Appointments />} />
           <Route path="/prescriptions" element={<Prescriptions />} />
           <Route path="/admin" element={<Admin />} />

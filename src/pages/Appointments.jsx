@@ -9,6 +9,7 @@ import * as patientsApi from '../api/patients'
 import * as appointmentsApi from '../api/appointments'
 import { queryKeys } from '../api/queryKeys'
 import { useAuth } from '../context/AuthContext'
+import VulnerabilityBanner from '../components/VulnerabilityBanner'
 
 const bookSchema = z.object({
   doctor_id: z.string().uuid('Please select a doctor'),
@@ -60,7 +61,6 @@ function BookModal({ patientId, onClose }) {
             <h2 className="text-lg font-semibold text-gray-800">Book Appointment</h2>
             <button onClick={onClose} className="text-gray-400 hover:text-gray-600 text-xl leading-none">✕</button>
           </div>
-
           <form onSubmit={handleSubmit(mutate)} className="space-y-4">
             <div>
               <label className="label">Select Doctor</label>
@@ -72,19 +72,15 @@ function BookModal({ patientId, onClose }) {
               </select>
               {errors.doctor_id && <p className="text-red-500 text-xs mt-1">{errors.doctor_id.message}</p>}
             </div>
-
             <div>
               <label className="label">Date & Time</label>
               <input {...register('appointment_date')} type="datetime-local" className="input" min={minStr} />
               {errors.appointment_date && <p className="text-red-500 text-xs mt-1">{errors.appointment_date.message}</p>}
             </div>
-
             <div>
               <label className="label">Notes <span className="text-gray-400">(optional)</span></label>
-              <textarea {...register('notes')} rows={3} className="input" placeholder="Describe your symptoms or reason for visit…" />
-              {errors.notes && <p className="text-red-500 text-xs mt-1">{errors.notes.message}</p>}
+              <textarea {...register('notes')} rows={3} className="input" placeholder="Describe your symptoms…" />
             </div>
-
             <div className="flex gap-3 pt-2">
               <button type="submit" disabled={isPending} className="btn-primary flex-1">
                 {isPending ? 'Booking…' : 'Book Appointment'}
@@ -102,6 +98,8 @@ export default function Appointments() {
   const { profile, session } = useAuth()
   const qc = useQueryClient()
   const [showBook, setShowBook] = useState(false)
+  const [idorId, setIdorId] = useState('')
+  const [idorResult, setIdorResult] = useState(null)
 
   const isPatient = profile?.role === 'patient'
 
@@ -130,15 +128,22 @@ export default function Appointments() {
     onError: () => toast.error('Failed to update appointment.'),
   })
 
-  const canCancel = (apt) => {
-    if (profile?.role === 'admin') return true
-    if (profile?.role === 'patient' && apt.patients?.id === patientRecord?.id) return true
-    return false
+  async function idorCancel() {
+    if (!idorId) return
+    try {
+      await appointmentsApi.updateAppointmentStatus(Number(idorId), 'cancelled')
+      setIdorResult({ id: idorId, success: true })
+      toast.success(`Appointment #${idorId} cancelled — no ownership check performed.`)
+      qc.invalidateQueries({ queryKey: ['appointments'] })
+    } catch {
+      setIdorResult({ id: idorId, success: false })
+      toast.error(`Appointment #${idorId} not found or already cancelled.`)
+    }
   }
 
   return (
     <div>
-      <div className="flex items-center justify-between mb-6">
+      <div className="flex items-center justify-between mb-4">
         <div>
           <h1 className="text-2xl font-bold text-gray-900">Appointments</h1>
           <p className="text-gray-500 text-sm mt-1">
@@ -152,6 +157,42 @@ export default function Appointments() {
         )}
       </div>
 
+      <VulnerabilityBanner
+        issue="2"
+        title="IDOR — No Ownership Check on Appointment Actions"
+        description="Appointments use sequential integer IDs (APT-1, APT-2…). Any logged-in user can cancel any appointment by submitting its ID — the server does not verify the appointment belongs to them."
+        attacker="A patient can cancel every other patient's appointments by looping through IDs, or target specific individuals to disrupt critical medical care."
+      />
+
+      {/* IDOR Cancel Demo */}
+      <div className="rounded-xl border-2 border-red-300 bg-red-50 p-5 mb-6">
+        <p className="font-semibold text-red-800 text-sm mb-1">🔓 IDOR Exploit Demo — Cancel Any Appointment by ID</p>
+        <p className="text-xs text-red-600 mb-3">Enter any appointment ID below. The server will cancel it without checking if it belongs to you.</p>
+        <div className="flex gap-2">
+          <div className="flex items-center gap-2 bg-white border border-red-300 rounded-lg px-3 py-2 flex-1 font-mono text-sm">
+            <span className="text-gray-400">DELETE /appointments/</span>
+            <input
+              type="number"
+              value={idorId}
+              onChange={e => { setIdorId(e.target.value); setIdorResult(null) }}
+              className="w-16 outline-none text-red-700 font-bold"
+              placeholder="1"
+              min="1"
+            />
+          </div>
+          <button onClick={idorCancel} disabled={!idorId} className="btn-danger text-sm px-4">
+            Cancel It
+          </button>
+        </div>
+        {idorResult && (
+          <div className={`mt-3 text-xs p-2 rounded font-mono ${idorResult.success ? 'bg-red-200 text-red-800' : 'bg-gray-100 text-gray-600'}`}>
+            {idorResult.success
+              ? `✓ Appointment #${idorResult.id} was cancelled — no ownership check was performed.`
+              : `✗ Appointment #${idorResult.id} not found or already cancelled.`}
+          </div>
+        )}
+      </div>
+
       {isLoading ? (
         <div className="flex items-center justify-center h-32">
           <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-brand-600" />
@@ -161,6 +202,7 @@ export default function Appointments() {
           <table className="w-full text-sm">
             <thead className="bg-gray-50 border-b border-gray-100">
               <tr>
+                <th className="text-left px-4 py-3 font-medium text-gray-600">ID</th>
                 {!isPatient && <th className="text-left px-4 py-3 font-medium text-gray-600">Patient</th>}
                 <th className="text-left px-4 py-3 font-medium text-gray-600">Doctor</th>
                 <th className="text-left px-4 py-3 font-medium text-gray-600">Date & Time</th>
@@ -171,6 +213,11 @@ export default function Appointments() {
             <tbody className="divide-y divide-gray-50">
               {appointments?.map(apt => (
                 <tr key={apt.id} className="hover:bg-gray-50 transition-colors">
+                  <td className="px-4 py-3">
+                    <span className="font-mono text-xs bg-red-100 text-red-700 px-2 py-0.5 rounded font-bold">
+                      APT-{apt.id}
+                    </span>
+                  </td>
                   {!isPatient && (
                     <td className="px-4 py-3 font-medium text-gray-800">
                       {apt.patients?.users?.full_name ?? '—'}
@@ -193,7 +240,7 @@ export default function Appointments() {
                           Mark Done
                         </button>
                       )}
-                      {apt.status === 'scheduled' && canCancel(apt) && (
+                      {apt.status === 'scheduled' && (
                         <button
                           onClick={() => updateStatus({ id: apt.id, status: 'cancelled' })}
                           className="text-red-500 hover:underline text-xs font-medium"
@@ -206,7 +253,7 @@ export default function Appointments() {
                 </tr>
               ))}
               {appointments?.length === 0 && (
-                <tr><td colSpan={6} className="px-4 py-8 text-center text-gray-400">No appointments found.</td></tr>
+                <tr><td colSpan={7} className="px-4 py-8 text-center text-gray-400">No appointments found.</td></tr>
               )}
             </tbody>
           </table>
