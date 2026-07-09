@@ -5,7 +5,6 @@ import * as usersApi from '../api/users'
 import { queryKeys } from '../api/queryKeys'
 import { useAuth } from '../context/AuthContext'
 import RoleGuard from '../components/RoleGuard'
-import VulnerabilityBanner from '../components/VulnerabilityBanner'
 
 const ROLE_COLORS = {
   patient: 'bg-green-100 text-green-800',
@@ -31,13 +30,14 @@ function CreateStaffModal({ onClose }) {
     setLoading(true)
 
     try {
-      await usersApi.createStaffUser({
+      const res = await usersApi.createStaffUser({
         full_name: form.full_name,
         email: form.email,
         password: form.password,
         role: form.role,
         phone_number: form.phone_number || null,
       })
+      if (res.error) throw new Error(res.details)
       toast.success('Staff account created.')
       qc.invalidateQueries({ queryKey: queryKeys.users })
       onClose()
@@ -106,11 +106,19 @@ export default function Admin() {
 
   const { data: profiles, isLoading } = useQuery({
     queryKey: queryKeys.users,
-    queryFn: usersApi.listUsers,
+    queryFn: async () => {
+      const res = await usersApi.listUsers()
+      if (res.error) throw new Error(res.details)
+      return res.data
+    },
   })
 
   const { mutate: changeRole } = useMutation({
-    mutationFn: ({ id, role }) => usersApi.updateUserRole(id, role),
+    mutationFn: async ({ id, role }) => {
+      const res = await usersApi.updateUserRole(id, role)
+      if (res.error) throw new Error(res.details)
+      return res.data
+    },
     onSuccess: () => {
       toast.success('Role updated')
       qc.invalidateQueries({ queryKey: queryKeys.users })
@@ -151,13 +159,6 @@ export default function Admin() {
           </div>
           <button onClick={() => setShowCreate(true)} className="btn-primary">+ Add Staff</button>
         </div>
-
-        <VulnerabilityBanner
-          issue="3"
-          title="API Accessible Without Real Authentication"
-          description="The REST API uses only the public anon key for access. Row Level Security policies are set to ALLOW ALL — meaning anyone who finds the API URL and anon key (visible in browser source) can query any table directly."
-          attacker="Run a single curl command with the public anon key to dump the entire patients table — no login, no token, no permission check."
-        />
 
         {/* Public API Demo */}
         <div className="rounded-xl border-2 border-yellow-300 bg-yellow-50 p-5 mb-6">

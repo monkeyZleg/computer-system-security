@@ -9,7 +9,6 @@ import * as patientsApi from '../api/patients'
 import * as appointmentsApi from '../api/appointments'
 import { queryKeys } from '../api/queryKeys'
 import { useAuth } from '../context/AuthContext'
-import VulnerabilityBanner from '../components/VulnerabilityBanner'
 
 const bookSchema = z.object({
   doctor_id: z.string().uuid('Please select a doctor'),
@@ -31,16 +30,24 @@ function BookModal({ patientId, onClose }) {
 
   const { data: doctors } = useQuery({
     queryKey: queryKeys.doctorsList,
-    queryFn: usersApi.listDoctors,
+    queryFn: async () => {
+      const res = await usersApi.listDoctors()
+      if (res.error) throw new Error(res.details)
+      return res.data
+    },
   })
 
   const { mutate, isPending } = useMutation({
-    mutationFn: (data) => appointmentsApi.bookAppointment({
-      patient_id: patientId,
-      doctor_id: data.doctor_id,
-      appointment_date: data.appointment_date,
-      notes: data.notes,
-    }),
+    mutationFn: async (data) => {
+      const res = await appointmentsApi.bookAppointment({
+        patient_id: patientId,
+        doctor_id: data.doctor_id,
+        appointment_date: data.appointment_date,
+        notes: data.notes,
+      })
+      if (res.error) throw new Error(res.details)
+      return res.data
+    },
     onSuccess: () => {
       toast.success('Appointment booked!')
       qc.invalidateQueries({ queryKey: ['appointments'] })
@@ -106,21 +113,33 @@ export default function Appointments() {
   const { data: patientRecord } = useQuery({
     queryKey: queryKeys.patientSelfId(session?.user.id),
     enabled: isPatient,
-    queryFn: () => patientsApi.getPatientIdByUserId(session.user.id),
+    queryFn: async () => {
+      const res = await patientsApi.getPatientIdByUserId(session.user.id)
+      if (res.error) throw new Error(res.details)
+      return res.data
+    },
   })
 
   const { data: appointments, isLoading } = useQuery({
     queryKey: queryKeys.appointments(profile?.role, session?.user.id),
     enabled: !!profile,
-    queryFn: () => appointmentsApi.listAppointments({
-      role: profile.role,
-      userId: session.user.id,
-      patientId: patientRecord?.id,
-    }),
+    queryFn: async () => {
+      const res = await appointmentsApi.listAppointments({
+        role: profile.role,
+        userId: session.user.id,
+        patientId: patientRecord?.id,
+      })
+      if (res.error) throw new Error(res.details)
+      return res.data
+    },
   })
 
   const { mutate: updateStatus } = useMutation({
-    mutationFn: ({ id, status }) => appointmentsApi.updateAppointmentStatus(id, status),
+    mutationFn: async ({ id, status }) => {
+      const res = await appointmentsApi.updateAppointmentStatus(id, status)
+      if (res.error) throw new Error(res.details)
+      return res.data
+    },
     onSuccess: () => {
       toast.success('Appointment updated')
       qc.invalidateQueries({ queryKey: ['appointments'] })
@@ -131,7 +150,8 @@ export default function Appointments() {
   async function idorCancel() {
     if (!idorId) return
     try {
-      await appointmentsApi.updateAppointmentStatus(Number(idorId), 'cancelled')
+      const res = await appointmentsApi.updateAppointmentStatus(Number(idorId), 'cancelled')
+      if (res.error) throw new Error(res.details)
       setIdorResult({ id: idorId, success: true })
       toast.success(`Appointment #${idorId} cancelled — no ownership check performed.`)
       qc.invalidateQueries({ queryKey: ['appointments'] })
@@ -156,13 +176,6 @@ export default function Appointments() {
           </button>
         )}
       </div>
-
-      <VulnerabilityBanner
-        issue="2"
-        title="IDOR — No Ownership Check on Appointment Actions"
-        description="Appointments use sequential integer IDs (APT-1, APT-2…). Any logged-in user can cancel any appointment by submitting its ID — the server does not verify the appointment belongs to them."
-        attacker="A patient can cancel every other patient's appointments by looping through IDs, or target specific individuals to disrupt critical medical care."
-      />
 
       {/* IDOR Cancel Demo */}
       <div className="rounded-xl border-2 border-red-300 bg-red-50 p-5 mb-6">

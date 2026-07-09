@@ -5,7 +5,6 @@ import { z } from 'zod'
 import { Link, useNavigate } from 'react-router-dom'
 import toast from 'react-hot-toast'
 import { useAuth } from '../context/AuthContext'
-import VulnerabilityBanner from '../components/VulnerabilityBanner'
 
 const schema = z.object({
   email: z.string().email('Enter a valid email address'),
@@ -69,13 +68,6 @@ export default function Login() {
           <h1 className="text-2xl font-bold text-gray-900">HPMS</h1>
           <p className="text-gray-500 text-sm mt-1">Healthcare Patient Management System</p>
         </div>
-
-        <VulnerabilityBanner
-          issue="3"
-          title="No Rate Limiting on Login API"
-          description="This login endpoint has no rate limiting, no account lockout, and no CAPTCHA. An attacker can try millions of password combinations per minute with no consequence."
-          attacker="Run a credential-stuffing script against this endpoint — it will never block you, no matter how many attempts you make."
-        />
 
         <div className="card">
           <h2 className="text-xl font-semibold text-gray-800 mb-4">Sign in to your account</h2>

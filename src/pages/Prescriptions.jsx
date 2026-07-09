@@ -8,7 +8,6 @@ import * as patientsApi from '../api/patients'
 import * as prescriptionsApi from '../api/prescriptions'
 import { queryKeys } from '../api/queryKeys'
 import { useAuth } from '../context/AuthContext'
-import VulnerabilityBanner from '../components/VulnerabilityBanner'
 
 const prescribeSchema = z.object({
   patient_search: z.string().min(1, 'Search and select a patient'),
@@ -30,8 +29,13 @@ function IssueModal({ doctorId, onClose }) {
 
   async function searchPatients(query) {
     if (!query || query.length < 2) return
-    const data = await patientsApi.searchPatientsByName(query)
-    setPatientResults(data ?? [])
+    const res = await patientsApi.searchPatientsByName(query)
+    if (res.error) {
+      toast.error('Search failed.')
+      setPatientResults([])
+      return
+    }
+    setPatientResults(res.data ?? [])
   }
 
   function pickPatient(p) {
@@ -42,13 +46,17 @@ function IssueModal({ doctorId, onClose }) {
   }
 
   const { mutate, isPending } = useMutation({
-    mutationFn: (data) => prescriptionsApi.issuePrescription({
-      patient_id: data.patient_id,
-      doctor_id: doctorId,
-      medication: data.medication,
-      dosage: data.dosage,
-      issue_date: data.issue_date,
-    }),
+    mutationFn: async (data) => {
+      const res = await prescriptionsApi.issuePrescription({
+        patient_id: data.patient_id,
+        doctor_id: doctorId,
+        medication: data.medication,
+        dosage: data.dosage,
+        issue_date: data.issue_date,
+      })
+      if (res.error) throw new Error(res.details)
+      return res.data
+    },
     onSuccess: () => {
       toast.success('Prescription issued!')
       qc.invalidateQueries({ queryKey: ['prescriptions'] })
@@ -131,17 +139,25 @@ export default function Prescriptions() {
   const { data: patientRecord } = useQuery({
     queryKey: queryKeys.patientSelfId(session?.user.id),
     enabled: isPatient,
-    queryFn: () => patientsApi.getPatientIdByUserId(session.user.id),
+    queryFn: async () => {
+      const res = await patientsApi.getPatientIdByUserId(session.user.id)
+      if (res.error) throw new Error(res.details)
+      return res.data
+    },
   })
 
   const { data: prescriptions, isLoading } = useQuery({
     queryKey: queryKeys.prescriptions(profile?.role, session?.user.id),
     enabled: !!profile,
-    queryFn: () => prescriptionsApi.listPrescriptions({
-      role: profile.role,
-      userId: session.user.id,
-      patientId: patientRecord?.id,
-    }),
+    queryFn: async () => {
+      const res = await prescriptionsApi.listPrescriptions({
+        role: profile.role,
+        userId: session.user.id,
+        patientId: patientRecord?.id,
+      })
+      if (res.error) throw new Error(res.details)
+      return res.data
+    },
   })
 
   return (
@@ -159,13 +175,6 @@ export default function Prescriptions() {
           </button>
         )}
       </div>
-
-      <VulnerabilityBanner
-        issue="3"
-        title="Excessive Data Exposure — API Returns All Fields"
-        description="The API returns every database column for each prescription, including internal IDs and foreign keys the frontend never displays. Attackers inspect the raw response in browser DevTools to harvest data beyond what the UI shows."
-        attacker="Open DevTools → Network → click any prescription request → see patient_id, doctor_id, and all fields in plain JSON — usable for further IDOR enumeration."
-      />
 
       {isLoading ? (
         <div className="flex items-center justify-center h-32">

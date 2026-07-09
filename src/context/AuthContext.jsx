@@ -23,13 +23,16 @@ export function AuthProvider({ children }) {
   }
 
   async function signIn(email, password) {
-    const user = await authApi.signIn({ email, password })
-    persist(user)
-    return user
+    const res = await authApi.signIn({ email, password })
+    if (res.error) throw new Error(res.details)
+    persist(res.data)
+    return res.data
   }
 
   async function signUp(fields) {
-    return authApi.signUp(fields)
+    const res = await authApi.signUp(fields)
+    if (res.error) throw new Error(res.details)
+    return res.data
   }
 
   async function signOut() {
@@ -39,8 +42,12 @@ export function AuthProvider({ children }) {
 
   async function refetchProfile() {
     if (!profile) return
-    const users = await usersApi.listUsers()
-    const fresh = users.find(u => u.id === profile.id)
+    const res = await usersApi.listUsers()
+    if (res.error) {
+      console.error('Failed to refetch profile:', res.details)
+      return
+    }
+    const fresh = res.data.find(u => u.id === profile.id)
     if (fresh) persist(fresh)
   }
 

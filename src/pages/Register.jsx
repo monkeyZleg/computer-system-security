@@ -6,7 +6,6 @@ import { Link, useNavigate } from 'react-router-dom'
 import toast from 'react-hot-toast'
 import { useAuth } from '../context/AuthContext'
 import * as patientsApi from '../api/patients'
-import VulnerabilityBanner from '../components/VulnerabilityBanner'
 
 const schema = z.object({
   full_name: z.string().min(2, 'Name must be at least 2 characters').max(100),
@@ -40,10 +39,11 @@ export default function Register() {
         phone_number: data.phone_number || null,
       })
 
-      await patientsApi.createPatientRecord({
+      const patRes = await patientsApi.createPatientRecord({
         user_id: newUser.id,
         date_of_birth: data.date_of_birth,
       })
+      if (patRes.error) throw new Error(patRes.details)
 
       setExposedRecord({
         id: newUser.id ?? 'a3f7b2c1-...',
@@ -72,13 +72,6 @@ export default function Register() {
               <span className="text-white text-2xl font-bold">H</span>
             </div>
           </div>
-
-          <VulnerabilityBanner
-            issue="1"
-            title="Password Stored as Plain Text"
-            description="Your password was just saved to the database exactly as you typed it — no hashing, no encryption. Anyone with database access can read it directly."
-            attacker="If the database is leaked or an insider looks at the users table, your actual password is visible in plain text."
-          />
 
           <div className="card">
             <p className="text-sm font-semibold text-gray-700 mb-3">What was inserted into the database:</p>
@@ -118,13 +111,6 @@ export default function Register() {
           <h1 className="text-2xl font-bold text-gray-900">Create Account</h1>
           <p className="text-gray-500 text-sm mt-1">Patient self-registration</p>
         </div>
-
-        <VulnerabilityBanner
-          issue="1"
-          title="Password Stored as Plain Text"
-          description="This system stores your password exactly as typed — no hashing or encryption is applied before saving to the database."
-          attacker="Any staff member with database access can read your password directly from the users table."
-        />
 
         <div className="card">
           <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">

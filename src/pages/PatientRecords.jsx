@@ -4,14 +4,17 @@ import { useQuery } from '@tanstack/react-query'
 import * as patientsApi from '../api/patients'
 import { queryKeys } from '../api/queryKeys'
 import { useAuth } from '../context/AuthContext'
-import VulnerabilityBanner from '../components/VulnerabilityBanner'
 
 function StaffRecordsView() {
   const [search, setSearch] = useState('')
 
   const { data: patients, isLoading } = useQuery({
     queryKey: queryKeys.patients,
-    queryFn: patientsApi.listPatients,
+    queryFn: async () => {
+      const res = await patientsApi.listPatients()
+      if (res.error) throw new Error(res.details)
+      return res.data
+    },
   })
 
   const filtered = patients?.filter(p =>
@@ -90,7 +93,11 @@ function PatientSelfView() {
 
   const { data: myPatient, isLoading } = useQuery({
     queryKey: queryKeys.patientSelf(session.user.id),
-    queryFn: () => patientsApi.getPatientByUserId(session.user.id),
+    queryFn: async () => {
+      const res = await patientsApi.getPatientByUserId(session.user.id)
+      if (res.error) throw new Error(res.details)
+      return res.data
+    },
   })
 
   if (isLoading) return <div className="flex items-center justify-center h-32"><div className="animate-spin rounded-full h-6 w-6 border-b-2 border-brand-600" /></div>
@@ -181,13 +188,6 @@ export default function PatientRecords() {
       <p className="text-gray-500 text-sm mb-4">
         {profile?.role === 'patient' ? 'Your personal health record.' : 'View and manage all patient records.'}
       </p>
-
-      <VulnerabilityBanner
-        issue="2"
-        title="IDOR — Sequential Patient IDs, No Ownership Check"
-        description="Patient records are identified by sequential integers (1, 2, 3…). Any logged-in user can request any patient ID and the server returns the full record — no check is made to verify the record belongs to them."
-        attacker="A logged-in patient can access any other patient's diagnosis, IC number, and medical history by incrementing the ID in the URL."
-      />
 
       {profile?.role === 'patient' && <PatientSelfView />}
       {(profile?.role === 'doctor' || profile?.role === 'nurse' || profile?.role === 'admin') && <StaffRecordsView />}

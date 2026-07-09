@@ -5,7 +5,6 @@ import * as appointmentsApi from '../api/appointments'
 import * as prescriptionsApi from '../api/prescriptions'
 import { queryKeys } from '../api/queryKeys'
 import { useAuth } from '../context/AuthContext'
-import VulnerabilityBanner from '../components/VulnerabilityBanner'
 
 function StatCard({ label, value, icon, color = 'blue' }) {
   const colors = {
@@ -50,19 +49,31 @@ function SimulatedErrorPanel() {
 function PatientDashboard({ userId }) {
   const { data: patient, error: patientError } = useQuery({
     queryKey: queryKeys.patientSelfId(userId),
-    queryFn: () => patientsApi.getPatientIdByUserId(userId),
+    queryFn: async () => {
+      const res = await patientsApi.getPatientIdByUserId(userId)
+      if (res.error) throw new Error(res.details)
+      return res.data
+    },
   })
 
   const { data: appointments, error: aptError } = useQuery({
     queryKey: queryKeys.myAppointments(patient?.id),
     enabled: !!patient?.id,
-    queryFn: () => appointmentsApi.getUpcomingAppointmentsForPatient(patient.id),
+    queryFn: async () => {
+      const res = await appointmentsApi.getUpcomingAppointmentsForPatient(patient.id)
+      if (res.error) throw new Error(res.details)
+      return res.data
+    },
   })
 
   const { data: prescriptions, error: rxError } = useQuery({
     queryKey: queryKeys.myPrescriptions(patient?.id),
     enabled: !!patient?.id,
-    queryFn: () => prescriptionsApi.getRecentPrescriptionsForPatient(patient.id),
+    queryFn: async () => {
+      const res = await prescriptionsApi.getRecentPrescriptionsForPatient(patient.id)
+      if (res.error) throw new Error(res.details)
+      return res.data
+    },
   })
 
   const anyError = patientError || aptError || rxError
@@ -121,12 +132,20 @@ function PatientDashboard({ userId }) {
 function DoctorDashboard({ userId }) {
   const { data: todayApts } = useQuery({
     queryKey: queryKeys.doctorToday(userId),
-    queryFn: () => appointmentsApi.getTodayAppointmentsForDoctor(userId),
+    queryFn: async () => {
+      const res = await appointmentsApi.getTodayAppointmentsForDoctor(userId)
+      if (res.error) throw new Error(res.details)
+      return res.data
+    },
   })
 
   const { data: totalPatients } = useQuery({
     queryKey: queryKeys.doctorPatientsCount,
-    queryFn: patientsApi.countPatients,
+    queryFn: async () => {
+      const res = await patientsApi.countPatients()
+      if (res.error) throw new Error(res.details)
+      return res.data
+    },
   })
 
   return (
@@ -163,12 +182,14 @@ function AdminDashboard() {
   const { data: counts } = useQuery({
     queryKey: queryKeys.adminCounts,
     queryFn: async () => {
-      const [patients, staff, appointments] = await Promise.all([
+      const [patientsRes, staffRes, appointmentsRes] = await Promise.all([
         patientsApi.countPatients(),
         usersApi.countStaff(),
         appointmentsApi.countScheduledAppointments(),
       ])
-      return { patients, staff, appointments }
+      const firstError = [patientsRes, staffRes, appointmentsRes].find(r => r.error)
+      if (firstError) throw new Error(firstError.details)
+      return { patients: patientsRes.data, staff: staffRes.data, appointments: appointmentsRes.data }
     },
   })
 
@@ -201,13 +222,6 @@ export default function Dashboard() {
           {profile.role} · {new Date().toLocaleDateString('en-MY', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
         </p>
       </div>
-
-      <VulnerabilityBanner
-        issue="1"
-        title="Detailed Error Messages Expose Database Structure"
-        description="When a query fails, this system returns the raw database error to the browser — including table names, server IP, SQL queries, and database version. This is illustrated in the panel below."
-        attacker="An attacker triggers intentional errors to map the database structure, identify the software versions, and find the server's internal IP address."
-      />
 
       {profile.role === 'patient' && <PatientDashboard userId={session.user.id} />}
       {(profile.role === 'doctor' || profile.role === 'nurse') && <DoctorDashboard userId={session.user.id} />}

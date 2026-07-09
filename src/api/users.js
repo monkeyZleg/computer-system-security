@@ -1,74 +1,77 @@
 import { supabase } from '../lib/supabase'
-import { unwrap } from './client'
+import { toResult } from './client'
 
 export async function listRoles() {
-  return unwrap(
-    await supabase.from('role').select('id, description').order('id')
-  )
+  const res = await supabase.from('role').select('id, description').order('id')
+  return toResult(res, { context: 'list roles' })
 }
 
 async function roleIdFromDescription(description) {
-  const row = unwrap(
-    await supabase.from('role').select('id').eq('description', description).single()
-  )
-  return row.id
+  return await supabase.from('role').select('id').eq('description', description).single()
 }
 
 export async function listUsers() {
-  const rows = unwrap(
-    await supabase
-      .from('users')
-      .select('id, full_name, email, phone_number, created_at, role:role(description)')
-      .order('created_at', { ascending: false })
-  )
-  return rows.map(u => ({ ...u, role: u.role.description }))
+  const res = await supabase
+    .from('users')
+    .select('id, full_name, email, phone_number, created_at, role:role(description)')
+    .order('created_at', { ascending: false })
+
+  if (res.error) {
+    console.error('Failed to list users:', res.error)
+    return { status: 500, error: 'Internal Server Error', details: res.error.message }
+  }
+  return { status: 200, data: res.data.map(u => ({ ...u, role: u.role.description })) }
 }
 
 export async function listDoctors() {
-  return unwrap(
-    await supabase
-      .from('users')
-      .select('id, full_name, role:role!inner(description)')
-      .eq('role.description', 'doctor')
-      .order('full_name')
-  )
+  const res = await supabase
+    .from('users')
+    .select('id, full_name, role:role!inner(description)')
+    .eq('role.description', 'doctor')
+    .order('full_name')
+  return toResult(res, { context: 'list doctors' })
 }
 
 export async function createStaffUser({ full_name, email, password, role, phone_number }) {
-  return unwrap(
-    await supabase
-      .rpc('register_user', {
-        p_full_name: full_name,
-        p_email: email,
-        p_password: password,
-        p_phone_number: phone_number || null,
-        p_role: role,
-      })
-      .single()
-  )
+  const res = await supabase
+    .rpc('register_user', {
+      p_full_name: full_name,
+      p_email: email,
+      p_password: password,
+      p_phone_number: phone_number || null,
+      p_role: role,
+    })
+    .single()
+  return toResult(res, { successStatus: 201, context: 'create staff user' })
 }
 
 export async function updateUserRole(id, roleDescription) {
-  const roleId = await roleIdFromDescription(roleDescription)
-  return unwrap(
-    await supabase.from('users').update({ role: roleId }).eq('id', id)
-  )
+  const roleRes = await roleIdFromDescription(roleDescription)
+  if (roleRes.error) {
+    console.error('Failed to resolve role id:', roleRes.error)
+    return { status: 500, error: 'Internal Server Error', details: roleRes.error.message }
+  }
+
+  const res = await supabase.from('users').update({ role: roleRes.data.id }).eq('id', id)
+  return toResult(res, { context: 'update user role' })
 }
 
 export async function countStaff() {
-  const roles = await listRoles()
-  const ids = roles.filter(r => r.description === 'doctor' || r.description === 'nurse').map(r => r.id)
-  const { count, error } = await supabase
+  const rolesRes = await listRoles()
+  if (rolesRes.error) return rolesRes
+
+  const ids = rolesRes.data.filter(r => r.description === 'doctor' || r.description === 'nurse').map(r => r.id)
+  const res = await supabase
     .from('users')
     .select('id', { count: 'exact', head: true })
     .in('role', ids)
-  if (error) throw error
-  return count
+  return toResult(res, { context: 'count staff', data: res.count })
 }
 
 // Exported for completeness (full CRUD); intentionally not wired into any UI —
 // deleting a doctor/nurse with existing appointments/prescriptions fails (FK NO ACTION),
 // while deleting a patient-role user cascades and silently removes their patient record.
 export async function deleteUser(id) {
-  return unwrap(await supabase.from('users').delete().eq('id', id))
+  const res = await supabase.from('users').delete().eq('id', id)
+  return toResult(res, { context: 'delete user' })
 }

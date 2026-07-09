@@ -6,7 +6,6 @@ import { z } from 'zod'
 import toast from 'react-hot-toast'
 import * as patientsApi from '../api/patients'
 import { useAuth } from '../context/AuthContext'
-import VulnerabilityBanner from '../components/VulnerabilityBanner'
 
 const updateSchema = z.object({
   home_address: z.string().max(300).optional().or(z.literal('')),
@@ -22,14 +21,22 @@ export default function PatientRecordDetail() {
 
   const { data: patient, isLoading, error } = useQuery({
     queryKey: ['patient-detail', id],
-    queryFn: () => patientsApi.getPatientById(Number(id)),
+    queryFn: async () => {
+      const res = await patientsApi.getPatientById(Number(id))
+      if (res.error) throw new Error(res.details)
+      return res.data
+    },
     retry: false,
   })
 
   const { data: myPatient } = useQuery({
     queryKey: ['patient-self-id', session?.user.id],
     enabled: profile?.role === 'patient',
-    queryFn: () => patientsApi.getPatientIdByUserId(session.user.id),
+    queryFn: async () => {
+      const res = await patientsApi.getPatientIdByUserId(session.user.id)
+      if (res.error) throw new Error(res.details)
+      return res.data
+    },
   })
 
   const canEdit = profile?.role === 'doctor' || profile?.role === 'admin'
@@ -46,7 +53,11 @@ export default function PatientRecordDetail() {
   })
 
   const { mutate: save, isPending } = useMutation({
-    mutationFn: (data) => patientsApi.updatePatientRecord(Number(id), data),
+    mutationFn: async (data) => {
+      const res = await patientsApi.updatePatientRecord(Number(id), data)
+      if (res.error) throw new Error(res.details)
+      return res.data
+    },
     onSuccess: () => {
       toast.success('Record updated')
       qc.invalidateQueries({ queryKey: ['patient-detail', id] })
@@ -102,13 +113,6 @@ export default function PatientRecordDetail() {
           </p>
         </div>
       )}
-
-      <VulnerabilityBanner
-        issue="2"
-        title="IDOR — URL-Based Record Access With No Ownership Check"
-        description={`The URL /records/${id} fetches patient #${id}'s record with no server-side ownership validation. Any logged-in user who guesses or increments this number gets full access.`}
-        attacker={`Try /records/${Number(id) + 1}, /records/${Number(id) + 2}, etc. — each returns a different patient's full medical record.`}
-      />
 
       {/* Patient info header */}
       <div className="card mb-4">
