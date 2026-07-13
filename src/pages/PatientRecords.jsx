@@ -75,13 +75,13 @@ function StaffRecordsView() {
       )}
 
       {/* IDOR explanation for staff view */}
-      <div className="mt-4 p-4 bg-red-50 border border-red-200 rounded-xl text-sm">
-        <p className="font-semibold text-red-800 mb-1">⚠️ IDOR — Sequential IDs exposed</p>
-        <p className="text-red-700">Patient IDs are sequential integers (1, 2, 3...). A logged-in attacker could loop through <span className="font-mono">/records/1</span> to <span className="font-mono">/records/99999</span> and harvest every patient record automatically. There is no server-side ownership check.</p>
+      {/* <div className="mt-4 p-4 bg-red-50 border border-red-200 rounded-xl text-sm">
+        <p className="font-semibold text-red-800 mb-1">⚠️ IDOR — No ownership check on record access</p>
+        <p className="text-red-700">Patient IDs here are UUIDs, so they can't be guessed by incrementing — but any ID leaked or obtained from another response (like this table) grants full access. A logged-in attacker who collects IDs from <span className="font-mono">/records</span> can fetch every patient's full record with <span className="font-mono">GET /records/&#123;id&#125;</span>. There is no server-side ownership check.</p>
         <div className="mt-2 bg-gray-900 rounded p-2 font-mono text-xs text-green-400">
-          {`for patient_id in range(1, 99999):\n    r = requests.get(f"/records/{'{patient_id}'}", cookies=my_session)\n    steal(r.json())  # No check — always returns data`}
+          {`for patient_id in leaked_ids:\n    r = requests.get(f"/records/{'{patient_id}'}", cookies=my_session)\n    steal(r.json())  # No check — always returns data`}
         </div>
-      </div>
+      </div> */}
     </div>
   )
 }
@@ -108,8 +108,8 @@ function PatientSelfView() {
       {/* Own record */}
       <div className="card space-y-4">
         <div className="flex items-center gap-2 mb-2">
-          <span className="text-xs font-mono bg-gray-100 text-gray-600 px-2 py-0.5 rounded">Your Record ID: <strong>#{myPatient.id}</strong></span>
-          <span className="text-xs text-gray-400">← this ID is sequential and predictable</span>
+          <span className="text-xs font-mono bg-gray-100 text-gray-600 px-2 py-0.5 rounded">Your Record ID: <strong>{myPatient.id}</strong></span>
+          <span className="text-xs text-gray-400">← anyone who obtains this ID can view your full record</span>
         </div>
 
         <div className="grid grid-cols-2 gap-4 text-sm">
@@ -149,18 +149,17 @@ function PatientSelfView() {
       <div className="rounded-xl border-2 border-red-300 bg-red-50 p-5">
         <p className="font-semibold text-red-800 text-sm mb-1">🔓 IDOR Exploit Demo — Access Any Patient Record</p>
         <p className="text-xs text-red-600 mb-4">
-          You are logged in as <strong>{profile?.full_name}</strong> (Patient #{myPatient.id}). Enter a different patient ID below. The server performs <strong>no ownership check</strong> — it will navigate to that record and return it to you.
+          You are logged in as <strong>{profile?.full_name}</strong> (Patient {myPatient.id}). Paste a different patient's record ID below. The server performs <strong>no ownership check</strong> — it will navigate to that record and return it to you.
         </p>
         <div className="flex gap-2">
           <div className="flex items-center gap-2 bg-white border border-red-300 rounded-lg px-3 py-2 flex-1 font-mono text-sm">
             <span className="text-gray-400">GET /records/</span>
             <input
-              type="number"
+              type="text"
               value={idorId}
               onChange={e => setIdorId(e.target.value)}
-              className="w-20 outline-none text-red-700 font-bold"
-              placeholder="1"
-              min="1"
+              className="flex-1 outline-none text-red-700 font-bold"
+              placeholder="paste another patient's UUID"
             />
           </div>
           <button
@@ -172,7 +171,7 @@ function PatientSelfView() {
           </button>
         </div>
         <p className="text-xs text-red-500 mt-2">
-          Try any number — you'll land on <span className="font-mono">http://localhost:5173/records/{idorId || 'N'}</span> with full access to that patient's data.
+          Try any valid patient ID — you'll land on <span className="font-mono">http://localhost:5173/records/{idorId || '…'}</span> with full access to that patient's data.
         </p>
       </div>
     </div>

@@ -22,7 +22,7 @@ export default function PatientRecordDetail() {
   const { data: patient, isLoading, error } = useQuery({
     queryKey: ['patient-detail', id],
     queryFn: async () => {
-      const res = await patientsApi.getPatientById(Number(id))
+      const res = await patientsApi.getPatientById(id)
       if (res.error) throw new Error(res.details)
       return res.data
     },
@@ -40,7 +40,7 @@ export default function PatientRecordDetail() {
   })
 
   const canEdit = profile?.role === 'doctor' || profile?.role === 'admin'
-  const isOwnRecord = profile?.role !== 'patient' || myPatient?.id === Number(id)
+  const isOwnRecord = profile?.role !== 'patient' || myPatient?.id === id
   const isPatientViewingOther = profile?.role === 'patient' && !isOwnRecord
 
   const { register, handleSubmit, formState: { errors }, reset } = useForm({
@@ -54,7 +54,7 @@ export default function PatientRecordDetail() {
 
   const { mutate: save, isPending } = useMutation({
     mutationFn: async (data) => {
-      const res = await patientsApi.updatePatientRecord(Number(id), data)
+      const res = await patientsApi.updatePatientRecord(id, data)
       if (res.error) throw new Error(res.details)
       return res.data
     },
@@ -180,25 +180,23 @@ export default function PatientRecordDetail() {
 
       {/* IDOR navigation demo */}
       <div className="rounded-xl border-2 border-red-300 bg-red-50 p-4">
-        <p className="text-sm font-semibold text-red-800 mb-2">🔓 Try accessing adjacent records:</p>
-        <div className="flex gap-2 flex-wrap">
-          {[Number(id) - 2, Number(id) - 1, Number(id), Number(id) + 1, Number(id) + 2]
-            .filter(n => n >= 1)
-            .map(n => (
-              <Link
-                key={n}
-                to={`/records/${n}`}
-                className={`px-3 py-1.5 rounded-lg text-sm font-mono font-semibold transition-colors ${
-                  n === Number(id)
-                    ? 'bg-red-600 text-white'
-                    : 'bg-white border border-red-300 text-red-700 hover:bg-red-100'
-                }`}
-              >
-                #{n}
-              </Link>
-            ))}
-        </div>
-        <p className="text-xs text-red-600 mt-2">Each button fetches a different patient's complete medical record with no permission check.</p>
+        <p className="text-sm font-semibold text-red-800 mb-2">🔓 Jump to another patient's record:</p>
+        <form
+          onSubmit={(e) => {
+            e.preventDefault()
+            const nextId = new FormData(e.currentTarget).get('jumpId')
+            if (nextId) navigate(`/records/${nextId}`)
+          }}
+          className="flex gap-2"
+        >
+          <input
+            name="jumpId"
+            className="input flex-1 font-mono text-sm"
+            placeholder="Paste another patient's record ID (UUID)"
+          />
+          <button type="submit" className="btn-danger text-sm px-4">Go</button>
+        </form>
+        <p className="text-xs text-red-600 mt-2">Any valid patient ID works here — the server performs no ownership check, it just returns whatever record you ask for.</p>
       </div>
     </div>
   )

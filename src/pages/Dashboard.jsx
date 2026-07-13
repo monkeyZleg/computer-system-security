@@ -124,7 +124,7 @@ function PatientDashboard({ userId }) {
         </div>
       )}
 
-      <SimulatedErrorPanel />
+      {/* <SimulatedErrorPanel /> */}
     </div>
   )
 }
@@ -173,7 +173,7 @@ function DoctorDashboard({ userId }) {
         </ul>
       </div>
 
-      <SimulatedErrorPanel />
+      {/* <SimulatedErrorPanel /> */}
     </div>
   )
 }
@@ -200,7 +200,7 @@ function AdminDashboard() {
         <StatCard label="Medical Staff" value={counts?.staff} icon="🩺" color="purple" />
         <StatCard label="Scheduled Appointments" value={counts?.appointments} icon="📅" color="orange" />
       </div>
-      <SimulatedErrorPanel />
+      {/* <SimulatedErrorPanel /> */}
     </div>
   )
 }

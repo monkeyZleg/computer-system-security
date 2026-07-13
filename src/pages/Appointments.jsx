@@ -150,7 +150,7 @@ export default function Appointments() {
   async function idorCancel() {
     if (!idorId) return
     try {
-      const res = await appointmentsApi.updateAppointmentStatus(Number(idorId), 'cancelled')
+      const res = await appointmentsApi.updateAppointmentStatus(idorId, 'cancelled')
       if (res.error) throw new Error(res.details)
       setIdorResult({ id: idorId, success: true })
       toast.success(`Appointment #${idorId} cancelled — no ownership check performed.`)
@@ -178,19 +178,18 @@ export default function Appointments() {
       </div>
 
       {/* IDOR Cancel Demo */}
-      <div className="rounded-xl border-2 border-red-300 bg-red-50 p-5 mb-6">
+      {/* <div className="rounded-xl border-2 border-red-300 bg-red-50 p-5 mb-6">
         <p className="font-semibold text-red-800 text-sm mb-1">🔓 IDOR Exploit Demo — Cancel Any Appointment by ID</p>
         <p className="text-xs text-red-600 mb-3">Enter any appointment ID below. The server will cancel it without checking if it belongs to you.</p>
         <div className="flex gap-2">
           <div className="flex items-center gap-2 bg-white border border-red-300 rounded-lg px-3 py-2 flex-1 font-mono text-sm">
             <span className="text-gray-400">DELETE /appointments/</span>
             <input
-              type="number"
+              type="text"
               value={idorId}
               onChange={e => { setIdorId(e.target.value); setIdorResult(null) }}
-              className="w-16 outline-none text-red-700 font-bold"
-              placeholder="1"
-              min="1"
+              className="flex-1 outline-none text-red-700 font-bold"
+              placeholder="paste an appointment UUID"
             />
           </div>
           <button onClick={idorCancel} disabled={!idorId} className="btn-danger text-sm px-4">
@@ -204,7 +203,7 @@ export default function Appointments() {
               : `✗ Appointment #${idorResult.id} not found or already cancelled.`}
           </div>
         )}
-      </div>
+      </div> */}
 
       {isLoading ? (
         <div className="flex items-center justify-center h-32">

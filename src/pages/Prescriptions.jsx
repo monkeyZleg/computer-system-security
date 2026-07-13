@@ -209,7 +209,7 @@ export default function Prescriptions() {
           </div>
 
           {/* Raw API response panel */}
-          <div className="rounded-xl border-2 border-yellow-300 bg-yellow-50 p-5">
+          {/* <div className="rounded-xl border-2 border-yellow-300 bg-yellow-50 p-5">
             <button
               onClick={() => setShowRaw(v => !v)}
               className="w-full flex items-center justify-between text-sm font-semibold text-yellow-800"
@@ -221,18 +221,18 @@ export default function Prescriptions() {
             {showRaw && (
               <div className="mt-4">
                 <p className="text-xs text-yellow-700 mb-2">
-                  Every field in the response below is sent to the browser — including <span className="font-mono font-bold">patient_id</span> and <span className="font-mono font-bold">doctor_id</span> which an attacker uses for further IDOR enumeration. A secure API would return ONLY <span className="font-mono">medication</span> and <span className="font-mono">dosage</span>.
+                  Every field in the response below is sent to the browser — including the <span className="font-mono font-bold">patient_id</span> and <span className="font-mono font-bold">doctor_id</span> UUIDs, which an attacker harvests and replays for IDOR (UUIDs can't be guessed by counting, but once leaked here they grant direct access). A secure API would return ONLY <span className="font-mono">medication</span> and <span className="font-mono">dosage</span>.
                 </p>
                 <div className="bg-gray-900 rounded-lg p-4 overflow-x-auto max-h-96 overflow-y-auto">
                   <pre className="text-xs font-mono leading-5">
                     {prescriptions?.map((rx, i) => (
                       <span key={rx.id}>
                         <span className="text-gray-400">{i === 0 ? '[' : ''}{'\n'}  {'{'}</span>{'\n'}
-                        <span className="text-yellow-400">    "id"</span><span className="text-gray-400">: </span><span className="text-orange-400 font-bold">{rx.id},  </span><span className="text-gray-500">// ← sequential int — use for IDOR enumeration</span>{'\n'}
+                        <span className="text-yellow-400">    "id"</span><span className="text-gray-400">: </span><span className="text-orange-400 font-bold">"{rx.id}",  </span><span className="text-gray-500">// ← UUID — not guessable, but leaked here for IDOR replay</span>{'\n'}
                         <span className="text-yellow-400">    "medication"</span><span className="text-gray-400">: </span><span className="text-green-400">"{rx.medication}",</span>{'\n'}
                         <span className="text-yellow-400">    "dosage"</span><span className="text-gray-400">: </span><span className="text-green-400">"{rx.dosage}",</span>{'\n'}
                         <span className="text-yellow-400">    "issue_date"</span><span className="text-gray-400">: </span><span className="text-green-400">"{rx.issue_date}",</span>{'\n'}
-                        <span className="text-red-400">    "patient_id"</span><span className="text-gray-400">: </span><span className="text-red-300 font-bold">{JSON.stringify(rx.patients?.id ?? rx.patient_id ?? '?')},  </span><span className="text-gray-500">// ← leaked! attacker queries patient #{rx.patients?.id}</span>{'\n'}
+                        <span className="text-red-400">    "patient_id"</span><span className="text-gray-400">: </span><span className="text-red-300 font-bold">{JSON.stringify(rx.patients?.id ?? rx.patient_id ?? '?')},  </span><span className="text-gray-500">// ← leaked! attacker replays this UUID to read the patient's record</span>{'\n'}
                         <span className="text-red-400">    "doctor_id"</span><span className="text-gray-400">: </span><span className="text-red-300 font-bold">"{rx.users?.id ?? 'uuid...'}",  </span><span className="text-gray-500">// ← leaked! attacker impersonates doctor</span>{'\n'}
                         <span className="text-gray-400">  {'}'}{i < (prescriptions?.length ?? 0) - 1 ? ',' : '\n]'}</span>{'\n'}
                       </span>
@@ -245,7 +245,7 @@ export default function Prescriptions() {
                 </p>
               </div>
             )}
-          </div>
+          </div> */}
         </>
       )}
 
