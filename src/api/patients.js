@@ -1,7 +1,12 @@
 import { supabase } from '../lib/supabase'
-import { toResult } from './client'
+import { toResult, forbidden } from './client'
 
-export async function listPatients() {
+const STAFF_ROLES = ['doctor', 'nurse', 'admin']
+
+export async function listPatients(viewer) {
+  if (!viewer || !STAFF_ROLES.includes(viewer.role)) {
+    return forbidden('Only staff can list patient records.')
+  }
   const res = await supabase
     .from('patients')
     .select('id, date_of_birth, users:users!user_id(full_name, phone_number)')
@@ -9,7 +14,11 @@ export async function listPatients() {
   return toResult(res, { context: 'list patients' })
 }
 
-export async function getPatientById(id) {
+// Ownership check: patients may only fetch their own record; staff may fetch any.
+export async function getPatientById(id, viewer) {
+  if (viewer?.role === 'patient' && viewer.patientId !== id) {
+    return forbidden('You can only view your own patient record.')
+  }
   const res = await supabase
     .from('patients')
     .select('id, date_of_birth, home_address, diagnosis, medical_history, users:users!user_id(full_name, phone_number)')
@@ -36,7 +45,10 @@ export async function getPatientIdByUserId(userId) {
   return toResult(res, { context: 'fetch patient id' })
 }
 
-export async function updatePatientRecord(patientId, { home_address, diagnosis, medical_history }) {
+export async function updatePatientRecord(patientId, { home_address, diagnosis, medical_history }, viewer) {
+  if (!viewer || (viewer.role !== 'doctor' && viewer.role !== 'admin')) {
+    return forbidden('Only doctors or admins can update patient records.')
+  }
   const res = await supabase
     .from('patients')
     .update({

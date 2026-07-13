@@ -1,5 +1,5 @@
 import { supabase } from '../lib/supabase'
-import { toResult } from './client'
+import { toResult, forbidden } from './client'
 
 export async function listRoles() {
   const res = await supabase.from('role').select('id, description').order('id')
@@ -10,7 +10,10 @@ async function roleIdFromDescription(description) {
   return await supabase.from('role').select('id').eq('description', description).single()
 }
 
-export async function listUsers() {
+export async function listUsers(viewer) {
+  if (!viewer || viewer.role !== 'admin') {
+    return forbidden('Only admins can view all user accounts.')
+  }
   const res = await supabase
     .from('users')
     .select('id, full_name, email, phone_number, created_at, role:role(description)')
@@ -32,7 +35,10 @@ export async function listDoctors() {
   return toResult(res, { context: 'list doctors' })
 }
 
-export async function createStaffUser({ full_name, email, password, role, phone_number }) {
+export async function createStaffUser({ full_name, email, password, role, phone_number }, viewer) {
+  if (!viewer || viewer.role !== 'admin') {
+    return forbidden('Only admins can create staff accounts.')
+  }
   const res = await supabase
     .rpc('register_user', {
       p_full_name: full_name,
@@ -45,7 +51,10 @@ export async function createStaffUser({ full_name, email, password, role, phone_
   return toResult(res, { successStatus: 201, context: 'create staff user' })
 }
 
-export async function updateUserRole(id, roleDescription) {
+export async function updateUserRole(id, roleDescription, viewer) {
+  if (!viewer || viewer.role !== 'admin') {
+    return forbidden('Only admins can change user roles.')
+  }
   const roleRes = await roleIdFromDescription(roleDescription)
   if (roleRes.error) {
     console.error('Failed to resolve role id:', roleRes.error)
@@ -71,7 +80,10 @@ export async function countStaff() {
 // Exported for completeness (full CRUD); intentionally not wired into any UI —
 // deleting a doctor/nurse with existing appointments/prescriptions fails (FK NO ACTION),
 // while deleting a patient-role user cascades and silently removes their patient record.
-export async function deleteUser(id) {
+export async function deleteUser(id, viewer) {
+  if (!viewer || viewer.role !== 'admin') {
+    return forbidden('Only admins can delete user accounts.')
+  }
   const res = await supabase.from('users').delete().eq('id', id)
   return toResult(res, { context: 'delete user' })
 }

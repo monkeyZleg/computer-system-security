@@ -1,5 +1,14 @@
 import { supabase } from '../lib/supabase'
-import { toResult } from './client'
+import { toResult, forbidden } from './client'
+
+async function ownsAppointment(id, viewer) {
+  if (viewer.role === 'admin' || viewer.role === 'nurse') return true
+  const res = await supabase.from('appointments').select('patient_id, doctor_id').eq('id', id).single()
+  if (res.error || !res.data) return false
+  if (viewer.role === 'patient') return res.data.patient_id === viewer.patientId
+  if (viewer.role === 'doctor') return res.data.doctor_id === viewer.userId
+  return false
+}
 
 export async function listAppointments({ role, userId, patientId }) {
   let query = supabase
@@ -28,7 +37,11 @@ export async function bookAppointment({ patient_id, doctor_id, appointment_date,
   return toResult(res, { successStatus: 201, context: 'book appointment' })
 }
 
-export async function updateAppointmentStatus(id, status) {
+// Ownership check: patients/doctors may only update their own appointments; staff may update any.
+export async function updateAppointmentStatus(id, status, viewer) {
+  if (!viewer || !(await ownsAppointment(id, viewer))) {
+    return forbidden('You can only update your own appointments.')
+  }
   const res = await supabase.from('appointments').update({ status }).eq('id', id)
   return toResult(res, { context: 'update appointment status' })
 }
@@ -69,7 +82,10 @@ export async function countScheduledAppointments() {
 
 // Exported for completeness; not wired into any UI — cancel-via-status already
 // covers the product need for removing an appointment from the active view.
-export async function deleteAppointment(id) {
+export async function deleteAppointment(id, viewer) {
+  if (!viewer || !(await ownsAppointment(id, viewer))) {
+    return forbidden('You can only delete your own appointments.')
+  }
   const res = await supabase.from('appointments').delete().eq('id', id)
   return toResult(res, { context: 'delete appointment' })
 }

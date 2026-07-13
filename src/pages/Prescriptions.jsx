@@ -47,13 +47,14 @@ function IssueModal({ doctorId, onClose }) {
 
   const { mutate, isPending } = useMutation({
     mutationFn: async (data) => {
+      const viewer = { role: 'doctor', userId: doctorId }
       const res = await prescriptionsApi.issuePrescription({
         patient_id: data.patient_id,
         doctor_id: doctorId,
         medication: data.medication,
         dosage: data.dosage,
         issue_date: data.issue_date,
-      })
+      }, viewer)
       if (res.error) throw new Error(res.details)
       return res.data
     },
@@ -62,7 +63,7 @@ function IssueModal({ doctorId, onClose }) {
       qc.invalidateQueries({ queryKey: ['prescriptions'] })
       onClose()
     },
-    onError: () => toast.error('Failed to issue prescription.'),
+    onError: (err) => toast.error(err?.message ?? 'Failed to issue prescription.'),
   })
 
   return (
@@ -132,7 +133,6 @@ function IssueModal({ doctorId, onClose }) {
 export default function Prescriptions() {
   const { profile, session } = useAuth()
   const [showIssue, setShowIssue] = useState(false)
-  const [showRaw, setShowRaw] = useState(false)
   const isPatient = profile?.role === 'patient'
   const isDoctor = profile?.role === 'doctor'
 
@@ -207,45 +207,6 @@ export default function Prescriptions() {
               <div className="col-span-full text-center py-12 text-gray-400">No prescriptions found.</div>
             )}
           </div>
-
-          {/* Raw API response panel */}
-          {/* <div className="rounded-xl border-2 border-yellow-300 bg-yellow-50 p-5">
-            <button
-              onClick={() => setShowRaw(v => !v)}
-              className="w-full flex items-center justify-between text-sm font-semibold text-yellow-800"
-            >
-              <span>🔍 Raw API Response — What the server actually returns (DevTools view)</span>
-              <span className="text-yellow-600">{showRaw ? '▲ Hide' : '▼ Show'}</span>
-            </button>
-
-            {showRaw && (
-              <div className="mt-4">
-                <p className="text-xs text-yellow-700 mb-2">
-                  Every field in the response below is sent to the browser — including the <span className="font-mono font-bold">patient_id</span> and <span className="font-mono font-bold">doctor_id</span> UUIDs, which an attacker harvests and replays for IDOR (UUIDs can't be guessed by counting, but once leaked here they grant direct access). A secure API would return ONLY <span className="font-mono">medication</span> and <span className="font-mono">dosage</span>.
-                </p>
-                <div className="bg-gray-900 rounded-lg p-4 overflow-x-auto max-h-96 overflow-y-auto">
-                  <pre className="text-xs font-mono leading-5">
-                    {prescriptions?.map((rx, i) => (
-                      <span key={rx.id}>
-                        <span className="text-gray-400">{i === 0 ? '[' : ''}{'\n'}  {'{'}</span>{'\n'}
-                        <span className="text-yellow-400">    "id"</span><span className="text-gray-400">: </span><span className="text-orange-400 font-bold">"{rx.id}",  </span><span className="text-gray-500">// ← UUID — not guessable, but leaked here for IDOR replay</span>{'\n'}
-                        <span className="text-yellow-400">    "medication"</span><span className="text-gray-400">: </span><span className="text-green-400">"{rx.medication}",</span>{'\n'}
-                        <span className="text-yellow-400">    "dosage"</span><span className="text-gray-400">: </span><span className="text-green-400">"{rx.dosage}",</span>{'\n'}
-                        <span className="text-yellow-400">    "issue_date"</span><span className="text-gray-400">: </span><span className="text-green-400">"{rx.issue_date}",</span>{'\n'}
-                        <span className="text-red-400">    "patient_id"</span><span className="text-gray-400">: </span><span className="text-red-300 font-bold">{JSON.stringify(rx.patients?.id ?? rx.patient_id ?? '?')},  </span><span className="text-gray-500">// ← leaked! attacker replays this UUID to read the patient's record</span>{'\n'}
-                        <span className="text-red-400">    "doctor_id"</span><span className="text-gray-400">: </span><span className="text-red-300 font-bold">"{rx.users?.id ?? 'uuid...'}",  </span><span className="text-gray-500">// ← leaked! attacker impersonates doctor</span>{'\n'}
-                        <span className="text-gray-400">  {'}'}{i < (prescriptions?.length ?? 0) - 1 ? ',' : '\n]'}</span>{'\n'}
-                      </span>
-                    ))}
-                    {(!prescriptions || prescriptions.length === 0) && <span className="text-gray-400">[]</span>}
-                  </pre>
-                </div>
-                <p className="text-xs text-yellow-700 mt-2">
-                  <strong>Fix:</strong> Use <span className="font-mono">SELECT medication, dosage, issue_date FROM prescriptions</span> — never <span className="font-mono">SELECT *</span>.
-                </p>
-              </div>
-            )}
-          </div> */}
         </>
       )}
 

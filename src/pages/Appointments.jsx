@@ -105,8 +105,6 @@ export default function Appointments() {
   const { profile, session } = useAuth()
   const qc = useQueryClient()
   const [showBook, setShowBook] = useState(false)
-  const [idorId, setIdorId] = useState('')
-  const [idorResult, setIdorResult] = useState(null)
 
   const isPatient = profile?.role === 'patient'
 
@@ -136,7 +134,8 @@ export default function Appointments() {
 
   const { mutate: updateStatus } = useMutation({
     mutationFn: async ({ id, status }) => {
-      const res = await appointmentsApi.updateAppointmentStatus(id, status)
+      const viewer = { role: profile.role, userId: session.user.id, patientId: patientRecord?.id }
+      const res = await appointmentsApi.updateAppointmentStatus(id, status, viewer)
       if (res.error) throw new Error(res.details)
       return res.data
     },
@@ -144,22 +143,8 @@ export default function Appointments() {
       toast.success('Appointment updated')
       qc.invalidateQueries({ queryKey: ['appointments'] })
     },
-    onError: () => toast.error('Failed to update appointment.'),
+    onError: (err) => toast.error(err?.message ?? 'Failed to update appointment.'),
   })
-
-  async function idorCancel() {
-    if (!idorId) return
-    try {
-      const res = await appointmentsApi.updateAppointmentStatus(idorId, 'cancelled')
-      if (res.error) throw new Error(res.details)
-      setIdorResult({ id: idorId, success: true })
-      toast.success(`Appointment #${idorId} cancelled — no ownership check performed.`)
-      qc.invalidateQueries({ queryKey: ['appointments'] })
-    } catch {
-      setIdorResult({ id: idorId, success: false })
-      toast.error(`Appointment #${idorId} not found or already cancelled.`)
-    }
-  }
 
   return (
     <div>
@@ -176,34 +161,6 @@ export default function Appointments() {
           </button>
         )}
       </div>
-
-      {/* IDOR Cancel Demo */}
-      {/* <div className="rounded-xl border-2 border-red-300 bg-red-50 p-5 mb-6">
-        <p className="font-semibold text-red-800 text-sm mb-1">🔓 IDOR Exploit Demo — Cancel Any Appointment by ID</p>
-        <p className="text-xs text-red-600 mb-3">Enter any appointment ID below. The server will cancel it without checking if it belongs to you.</p>
-        <div className="flex gap-2">
-          <div className="flex items-center gap-2 bg-white border border-red-300 rounded-lg px-3 py-2 flex-1 font-mono text-sm">
-            <span className="text-gray-400">DELETE /appointments/</span>
-            <input
-              type="text"
-              value={idorId}
-              onChange={e => { setIdorId(e.target.value); setIdorResult(null) }}
-              className="flex-1 outline-none text-red-700 font-bold"
-              placeholder="paste an appointment UUID"
-            />
-          </div>
-          <button onClick={idorCancel} disabled={!idorId} className="btn-danger text-sm px-4">
-            Cancel It
-          </button>
-        </div>
-        {idorResult && (
-          <div className={`mt-3 text-xs p-2 rounded font-mono ${idorResult.success ? 'bg-red-200 text-red-800' : 'bg-gray-100 text-gray-600'}`}>
-            {idorResult.success
-              ? `✓ Appointment #${idorResult.id} was cancelled — no ownership check was performed.`
-              : `✗ Appointment #${idorResult.id} not found or already cancelled.`}
-          </div>
-        )}
-      </div> */}
 
       {isLoading ? (
         <div className="flex items-center justify-center h-32">

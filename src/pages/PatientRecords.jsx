@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
+import { Link } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import * as patientsApi from '../api/patients'
 import { queryKeys } from '../api/queryKeys'
@@ -7,11 +7,12 @@ import { useAuth } from '../context/AuthContext'
 
 function StaffRecordsView() {
   const [search, setSearch] = useState('')
+  const { profile } = useAuth()
 
   const { data: patients, isLoading } = useQuery({
     queryKey: queryKeys.patients,
     queryFn: async () => {
-      const res = await patientsApi.listPatients()
+      const res = await patientsApi.listPatients({ role: profile.role })
       if (res.error) throw new Error(res.details)
       return res.data
     },
@@ -73,24 +74,12 @@ function StaffRecordsView() {
           </table>
         </div>
       )}
-
-      {/* IDOR explanation for staff view */}
-      {/* <div className="mt-4 p-4 bg-red-50 border border-red-200 rounded-xl text-sm">
-        <p className="font-semibold text-red-800 mb-1">⚠️ IDOR — No ownership check on record access</p>
-        <p className="text-red-700">Patient IDs here are UUIDs, so they can't be guessed by incrementing — but any ID leaked or obtained from another response (like this table) grants full access. A logged-in attacker who collects IDs from <span className="font-mono">/records</span> can fetch every patient's full record with <span className="font-mono">GET /records/&#123;id&#125;</span>. There is no server-side ownership check.</p>
-        <div className="mt-2 bg-gray-900 rounded p-2 font-mono text-xs text-green-400">
-          {`for patient_id in leaked_ids:\n    r = requests.get(f"/records/{'{patient_id}'}", cookies=my_session)\n    steal(r.json())  # No check — always returns data`}
-        </div>
-      </div> */}
     </div>
   )
 }
 
 function PatientSelfView() {
-  const { session, profile } = useAuth()
-  const navigate = useNavigate()
-  const [idorId, setIdorId] = useState('')
-
+  const { session } = useAuth()
   const { data: myPatient, isLoading } = useQuery({
     queryKey: queryKeys.patientSelf(session.user.id),
     queryFn: async () => {
@@ -107,11 +96,6 @@ function PatientSelfView() {
     <div className="max-w-2xl space-y-6">
       {/* Own record */}
       <div className="card space-y-4">
-        <div className="flex items-center gap-2 mb-2">
-          <span className="text-xs font-mono bg-gray-100 text-gray-600 px-2 py-0.5 rounded">Your Record ID: <strong>{myPatient.id}</strong></span>
-          <span className="text-xs text-gray-400">← anyone who obtains this ID can view your full record</span>
-        </div>
-
         <div className="grid grid-cols-2 gap-4 text-sm">
           <div>
             <p className="text-gray-500 text-xs uppercase tracking-wide">Full Name</p>
@@ -143,36 +127,6 @@ function PatientSelfView() {
         <Link to={`/records/${myPatient.id}`} className="btn-secondary inline-flex text-sm">
           View Full Record →
         </Link>
-      </div>
-
-      {/* IDOR Demo */}
-      <div className="rounded-xl border-2 border-red-300 bg-red-50 p-5">
-        <p className="font-semibold text-red-800 text-sm mb-1">🔓 IDOR Exploit Demo — Access Any Patient Record</p>
-        <p className="text-xs text-red-600 mb-4">
-          You are logged in as <strong>{profile?.full_name}</strong> (Patient {myPatient.id}). Paste a different patient's record ID below. The server performs <strong>no ownership check</strong> — it will navigate to that record and return it to you.
-        </p>
-        <div className="flex gap-2">
-          <div className="flex items-center gap-2 bg-white border border-red-300 rounded-lg px-3 py-2 flex-1 font-mono text-sm">
-            <span className="text-gray-400">GET /records/</span>
-            <input
-              type="text"
-              value={idorId}
-              onChange={e => setIdorId(e.target.value)}
-              className="flex-1 outline-none text-red-700 font-bold"
-              placeholder="paste another patient's UUID"
-            />
-          </div>
-          <button
-            onClick={() => idorId && navigate(`/records/${idorId}`)}
-            disabled={!idorId}
-            className="btn-danger text-sm px-4"
-          >
-            Go to Record
-          </button>
-        </div>
-        <p className="text-xs text-red-500 mt-2">
-          Try any valid patient ID — you'll land on <span className="font-mono">http://localhost:5173/records/{idorId || '…'}</span> with full access to that patient's data.
-        </p>
       </div>
     </div>
   )

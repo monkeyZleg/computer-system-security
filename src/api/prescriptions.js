@@ -1,5 +1,5 @@
 import { supabase } from '../lib/supabase'
-import { toResult } from './client'
+import { toResult, forbidden } from './client'
 
 export async function listPrescriptions({ role, userId, patientId }) {
   let query = supabase
@@ -17,7 +17,10 @@ export async function listPrescriptions({ role, userId, patientId }) {
   return toResult(res, { context: 'list prescriptions' })
 }
 
-export async function issuePrescription({ patient_id, doctor_id, medication, dosage, issue_date }) {
+export async function issuePrescription({ patient_id, doctor_id, medication, dosage, issue_date }, viewer) {
+  if (!viewer || viewer.role !== 'doctor' || viewer.userId !== doctor_id) {
+    return forbidden('Only the treating doctor can issue this prescription.')
+  }
   const res = await supabase.from('prescriptions').insert({
     patient_id,
     doctor_id,
@@ -39,7 +42,10 @@ export async function getRecentPrescriptionsForPatient(patientId, limit = 5) {
 }
 
 // Exported for completeness; not wired into any UI.
-export async function deletePrescription(id) {
+export async function deletePrescription(id, viewer) {
+  if (!viewer || viewer.role !== 'admin') {
+    return forbidden('Only admins can delete prescriptions.')
+  }
   const res = await supabase.from('prescriptions').delete().eq('id', id)
   return toResult(res, { context: 'delete prescription' })
 }

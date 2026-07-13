@@ -1,4 +1,4 @@
-import { useParams, useNavigate, Link } from 'react-router-dom'
+import { useParams, Link } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
@@ -15,19 +15,8 @@ const updateSchema = z.object({
 
 export default function PatientRecordDetail() {
   const { id } = useParams()
-  const navigate = useNavigate()
   const qc = useQueryClient()
   const { profile, session } = useAuth()
-
-  const { data: patient, isLoading, error } = useQuery({
-    queryKey: ['patient-detail', id],
-    queryFn: async () => {
-      const res = await patientsApi.getPatientById(id)
-      if (res.error) throw new Error(res.details)
-      return res.data
-    },
-    retry: false,
-  })
 
   const { data: myPatient } = useQuery({
     queryKey: ['patient-self-id', session?.user.id],
@@ -39,9 +28,21 @@ export default function PatientRecordDetail() {
     },
   })
 
+  const isPatient = profile?.role === 'patient'
+
+  const { data: patient, isLoading, error } = useQuery({
+    queryKey: ['patient-detail', id],
+    enabled: !!profile && (!isPatient || !!myPatient),
+    queryFn: async () => {
+      const viewer = { role: profile.role, userId: session.user.id, patientId: myPatient?.id }
+      const res = await patientsApi.getPatientById(id, viewer)
+      if (res.error) throw new Error(res.details)
+      return res.data
+    },
+    retry: false,
+  })
+
   const canEdit = profile?.role === 'doctor' || profile?.role === 'admin'
-  const isOwnRecord = profile?.role !== 'patient' || myPatient?.id === id
-  const isPatientViewingOther = profile?.role === 'patient' && !isOwnRecord
 
   const { register, handleSubmit, formState: { errors }, reset } = useForm({
     resolver: zodResolver(updateSchema),
@@ -54,7 +55,8 @@ export default function PatientRecordDetail() {
 
   const { mutate: save, isPending } = useMutation({
     mutationFn: async (data) => {
-      const res = await patientsApi.updatePatientRecord(id, data)
+      const viewer = { role: profile.role, userId: session.user.id }
+      const res = await patientsApi.updatePatientRecord(id, data, viewer)
       if (res.error) throw new Error(res.details)
       return res.data
     },
@@ -63,7 +65,7 @@ export default function PatientRecordDetail() {
       qc.invalidateQueries({ queryKey: ['patient-detail', id] })
       qc.invalidateQueries({ queryKey: ['patients'] })
     },
-    onError: () => toast.error('Failed to update record.'),
+    onError: (err) => toast.error(err?.message ?? 'Failed to update record.'),
   })
 
   if (isLoading) {
@@ -97,36 +99,16 @@ export default function PatientRecordDetail() {
         </span>
       </div>
 
-      {/* IDOR warning banner — shown when a patient is viewing someone else's record */}
-      {isPatientViewingOther && (
-        <div className="mb-4 rounded-xl border-2 border-red-400 bg-red-100 p-4">
-          <p className="font-bold text-red-800 text-sm mb-1">
-            ⚠️ IDOR Vulnerability — Unauthorized Access Demonstrated
-          </p>
-          <p className="text-red-700 text-xs">
-            You are logged in as <strong>{profile?.full_name}</strong> (Patient #{myPatient?.id}) but you
-            are viewing Patient #{id}'s confidential medical record. The server performed
-            <strong> no ownership check</strong> — it returned this record because you asked for it.
-          </p>
-          <p className="text-red-600 text-xs mt-1 font-mono">
-            URL: http://localhost:5173/records/{id} ← attacker simply changes this number
-          </p>
-        </div>
-      )}
-
       {/* Patient info header */}
       <div className="card mb-4">
         <div className="flex items-center justify-between mb-4">
           <div>
             <div className="flex items-center gap-2">
               <h1 className="text-xl font-bold text-gray-900">{patient.users?.full_name}</h1>
-              <span className="font-mono text-xs bg-red-100 text-red-700 px-2 py-0.5 rounded font-bold">
+              <span className="font-mono text-xs bg-gray-100 text-gray-600 px-2 py-0.5 rounded font-bold">
                 #{patient.id}
               </span>
             </div>
-            <p className="text-sm text-gray-500 mt-0.5 font-mono">
-              GET /records/{id} — no auth check performed
-            </p>
           </div>
           <Link to="/records" className="btn-secondary text-sm">← Back</Link>
         </div>
@@ -150,19 +132,13 @@ export default function PatientRecordDetail() {
           </div>
 
           <div>
-            <label className="label">
-              Diagnosis
-              {isPatientViewingOther && <span className="ml-2 text-xs text-red-600 font-normal">← you should not be seeing this</span>}
-            </label>
+            <label className="label">Diagnosis</label>
             <textarea {...register('diagnosis')} rows={3} className="input" disabled={!canEdit} placeholder="No active diagnosis" />
             {errors.diagnosis && <p className="text-red-500 text-xs mt-1">{errors.diagnosis.message}</p>}
           </div>
 
           <div>
-            <label className="label">
-              Medical History
-              {isPatientViewingOther && <span className="ml-2 text-xs text-red-600 font-normal">← you should not be seeing this</span>}
-            </label>
+            <label className="label">Medical History</label>
             <textarea {...register('medical_history')} rows={5} className="input" disabled={!canEdit} placeholder="No history recorded" />
             {errors.medical_history && <p className="text-red-500 text-xs mt-1">{errors.medical_history.message}</p>}
           </div>
@@ -176,27 +152,6 @@ export default function PatientRecordDetail() {
             </div>
           )}
         </form>
-      </div>
-
-      {/* IDOR navigation demo */}
-      <div className="rounded-xl border-2 border-red-300 bg-red-50 p-4">
-        <p className="text-sm font-semibold text-red-800 mb-2">🔓 Jump to another patient's record:</p>
-        <form
-          onSubmit={(e) => {
-            e.preventDefault()
-            const nextId = new FormData(e.currentTarget).get('jumpId')
-            if (nextId) navigate(`/records/${nextId}`)
-          }}
-          className="flex gap-2"
-        >
-          <input
-            name="jumpId"
-            className="input flex-1 font-mono text-sm"
-            placeholder="Paste another patient's record ID (UUID)"
-          />
-          <button type="submit" className="btn-danger text-sm px-4">Go</button>
-        </form>
-        <p className="text-xs text-red-600 mt-2">Any valid patient ID works here — the server performs no ownership check, it just returns whatever record you ask for.</p>
       </div>
     </div>
   )

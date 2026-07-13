@@ -24,30 +24,8 @@ function StatCard({ label, value, icon, color = 'blue' }) {
   )
 }
 
-function SimulatedErrorPanel() {
-  return (
-    <div className="card border border-red-200">
-      <p className="text-sm font-semibold text-gray-700 mb-3">
-        💥 What happens when any query fails — raw error returned to browser:
-      </p>
-      <div className="bg-gray-900 rounded-lg p-4 text-xs font-mono space-y-0.5 overflow-x-auto">
-        <p className="text-red-400">HTTP 500 Internal Server Error</p>
-        <p className="text-yellow-300 mt-2">OperationalError: (psycopg2.errors.UndefinedTable)</p>
-        <p className="text-orange-300">  relation &quot;patients&quot; does not exist</p>
-        <p className="text-gray-400 mt-1">[SQL: SELECT * FROM patients WHERE id = 999]</p>
-        <p className="text-cyan-400 mt-1">Server: 192.168.1.10:5432   <span className="text-gray-500">← internal IP exposed</span></p>
-        <p className="text-cyan-400">Database: hpms_db             <span className="text-gray-500">← DB name exposed</span></p>
-        <p className="text-cyan-400">PostgreSQL Version: 15.1       <span className="text-gray-500">← version exposed (known exploits)</span></p>
-      </div>
-      <p className="text-xs text-gray-500 mt-3">
-        <strong>Fix:</strong> Catch exceptions server-side, log privately, and return only: <span className="font-mono">{'{'}  "error": "Something went wrong. Please try again."  {'}'}</span>
-      </p>
-    </div>
-  )
-}
-
 function PatientDashboard({ userId }) {
-  const { data: patient, error: patientError } = useQuery({
+  const { data: patient } = useQuery({
     queryKey: queryKeys.patientSelfId(userId),
     queryFn: async () => {
       const res = await patientsApi.getPatientIdByUserId(userId)
@@ -56,7 +34,7 @@ function PatientDashboard({ userId }) {
     },
   })
 
-  const { data: appointments, error: aptError } = useQuery({
+  const { data: appointments } = useQuery({
     queryKey: queryKeys.myAppointments(patient?.id),
     enabled: !!patient?.id,
     queryFn: async () => {
@@ -66,7 +44,7 @@ function PatientDashboard({ userId }) {
     },
   })
 
-  const { data: prescriptions, error: rxError } = useQuery({
+  const { data: prescriptions } = useQuery({
     queryKey: queryKeys.myPrescriptions(patient?.id),
     enabled: !!patient?.id,
     queryFn: async () => {
@@ -75,8 +53,6 @@ function PatientDashboard({ userId }) {
       return res.data
     },
   })
-
-  const anyError = patientError || aptError || rxError
 
   return (
     <div className="space-y-6">
@@ -115,16 +91,6 @@ function PatientDashboard({ userId }) {
           </ul>
         </div>
       </div>
-
-      {/* Raw error panel — only shown if a real error occurred */}
-      {anyError && (
-        <div className="p-4 bg-red-50 border border-red-300 rounded-xl text-xs font-mono">
-          <p className="text-red-700 font-semibold mb-2">⚠️ Raw error exposed to browser (Sensitive Data Exposure):</p>
-          <p className="text-red-600">{String(anyError?.message ?? anyError)}</p>
-        </div>
-      )}
-
-      {/* <SimulatedErrorPanel /> */}
     </div>
   )
 }
@@ -172,8 +138,6 @@ function DoctorDashboard({ userId }) {
           ))}
         </ul>
       </div>
-
-      {/* <SimulatedErrorPanel /> */}
     </div>
   )
 }
@@ -199,9 +163,7 @@ function AdminDashboard() {
         <StatCard label="Total Patients" value={counts?.patients} icon="👥" color="blue" />
         <StatCard label="Medical Staff" value={counts?.staff} icon="🩺" color="purple" />
         <StatCard label="Scheduled Appointments" value={counts?.appointments} icon="📅" color="orange" />
-      </div>
-      {/* <SimulatedErrorPanel /> */}
-    </div>
+      </div>    </div>
   )
 }
 

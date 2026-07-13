@@ -13,10 +13,7 @@ const ROLE_COLORS = {
   admin: 'bg-red-100 text-red-800',
 }
 
-const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL
-const ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY
-
-function CreateStaffModal({ onClose }) {
+function CreateStaffModal({ onClose, viewer }) {
   const qc = useQueryClient()
   const [form, setForm] = useState({ full_name: '', email: '', password: '', role: 'doctor', phone_number: '' })
   const [loading, setLoading] = useState(false)
@@ -36,13 +33,13 @@ function CreateStaffModal({ onClose }) {
         password: form.password,
         role: form.role,
         phone_number: form.phone_number || null,
-      })
+      }, viewer)
       if (res.error) throw new Error(res.details)
       toast.success('Staff account created.')
       qc.invalidateQueries({ queryKey: queryKeys.users })
       onClose()
-    } catch (err) {
-      toast.error(err?.message?.includes('duplicate') ? 'An account with this email already exists.' : 'Could not create account.')
+    } catch {
+      toast.error('Could not create account. The email may already be in use.')
     } finally {
       setLoading(false)
     }
@@ -68,9 +65,6 @@ function CreateStaffModal({ onClose }) {
             <div>
               <label className="label">Temporary Password *</label>
               <input type="password" className="input" value={form.password} onChange={e => setForm(f => ({ ...f, password: e.target.value }))} placeholder="Min. 8 characters" />
-              {form.password.length >= 4 && (
-                <p className="text-xs text-red-500 font-mono mt-1">Will be stored as: <strong>{form.password}</strong> ← plain text</p>
-              )}
             </div>
             <div>
               <label className="label">Role *</label>
@@ -98,16 +92,17 @@ function CreateStaffModal({ onClose }) {
 }
 
 export default function Admin() {
-  const { session } = useAuth()
+  const { session, profile } = useAuth()
   const qc = useQueryClient()
   const [showCreate, setShowCreate] = useState(false)
   const [search, setSearch] = useState('')
-  const [showApiDemo, setShowApiDemo] = useState(false)
+
+  const viewer = { role: profile?.role, userId: session?.user.id }
 
   const { data: profiles, isLoading } = useQuery({
     queryKey: queryKeys.users,
     queryFn: async () => {
-      const res = await usersApi.listUsers()
+      const res = await usersApi.listUsers(viewer)
       if (res.error) throw new Error(res.details)
       return res.data
     },
@@ -115,7 +110,7 @@ export default function Admin() {
 
   const { mutate: changeRole } = useMutation({
     mutationFn: async ({ id, role }) => {
-      const res = await usersApi.updateUserRole(id, role)
+      const res = await usersApi.updateUserRole(id, role, viewer)
       if (res.error) throw new Error(res.details)
       return res.data
     },
@@ -123,7 +118,7 @@ export default function Admin() {
       toast.success('Role updated')
       qc.invalidateQueries({ queryKey: queryKeys.users })
     },
-    onError: () => toast.error('Failed to update role.'),
+    onError: (err) => toast.error(err?.message ?? 'Failed to update role.'),
   })
 
   const filtered = profiles?.filter(p =>
@@ -136,19 +131,6 @@ export default function Admin() {
     return acc
   }, {})
 
-  const curlCommand = `curl "${SUPABASE_URL}/rest/v1/patients?select=*" \\
-  -H "apikey: ${ANON_KEY?.slice(0, 40)}..." \\
-  -H "Authorization: Bearer ${ANON_KEY?.slice(0, 40)}..."
-# No login required — anyone with this URL gets ALL patient records`
-
-  const simulatedResponse = `[
-  {"id":1,"user_id":"a3f7...","ic_number":"901234-56-7890",
-   "diagnosis":"HIV Positive","home_address":"No 12, Jalan PJ..."},
-  {"id":2,"user_id":"b4e8...","ic_number":"921234-56-7891",
-   "diagnosis":"Stage 3 Cancer","home_address":"No 45, Taman..."},
-  ... (all patients returned instantly)
-]`
-
   return (
     <RoleGuard allowed={['admin']}>
       <div>
@@ -158,41 +140,6 @@ export default function Admin() {
             <p className="text-gray-500 text-sm mt-1">Manage user accounts and roles.</p>
           </div>
           <button onClick={() => setShowCreate(true)} className="btn-primary">+ Add Staff</button>
-        </div>
-
-        {/* Public API Demo */}
-        <div className="rounded-xl border-2 border-yellow-300 bg-yellow-50 p-5 mb-6">
-          <button
-            onClick={() => setShowApiDemo(v => !v)}
-            className="w-full flex items-center justify-between text-sm font-semibold text-yellow-800"
-          >
-            <span>🌐 Zero-Authentication API Demo — Anyone can run this curl command</span>
-            <span className="text-yellow-600">{showApiDemo ? '▲ Hide' : '▼ Show'}</span>
-          </button>
-
-          {showApiDemo && (
-            <div className="mt-4 space-y-4">
-              <div>
-                <p className="text-xs text-yellow-700 mb-2 font-medium">The command below works for ANY anonymous user — no login required:</p>
-                <div className="bg-gray-900 rounded-lg p-4 overflow-x-auto">
-                  <pre className="text-xs font-mono text-green-400 whitespace-pre">{curlCommand}</pre>
-                </div>
-              </div>
-              <div>
-                <p className="text-xs text-yellow-700 mb-2 font-medium">Simulated response — all patient records returned instantly:</p>
-                <div className="bg-gray-900 rounded-lg p-4 overflow-x-auto">
-                  <pre className="text-xs font-mono text-red-400 whitespace-pre">{simulatedResponse}</pre>
-                </div>
-              </div>
-              <div className="p-3 bg-white border border-yellow-200 rounded-lg text-xs">
-                <p className="font-semibold text-gray-800 mb-1">Fix: Use RLS policies that actually restrict access:</p>
-                <code className="text-gray-600">
-                  CREATE POLICY &quot;patients: own record only&quot; ON patients<br/>
-                  FOR SELECT USING (user_id = auth.uid());
-                </code>
-              </div>
-            </div>
-          )}
         </div>
 
         {/* Stats */}
@@ -265,7 +212,7 @@ export default function Admin() {
           </div>
         )}
 
-        {showCreate && <CreateStaffModal onClose={() => setShowCreate(false)} />}
+        {showCreate && <CreateStaffModal onClose={() => setShowCreate(false)} viewer={viewer} />}
       </div>
     </RoleGuard>
   )
