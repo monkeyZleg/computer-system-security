@@ -5,13 +5,13 @@ import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import toast from 'react-hot-toast'
 import * as patientsApi from '../api/patients'
+import * as usersApi from '../api/users'
 import * as prescriptionsApi from '../api/prescriptions'
 import { queryKeys } from '../api/queryKeys'
 import { useAuth } from '../context/AuthContext'
 
 const prescribeSchema = z.object({
-  patient_search: z.string().min(1, 'Search and select a patient'),
-  patient_id: z.string().uuid('Please select a patient from the list'),
+  patient_id: z.string().uuid('Please select a patient'),
   medication: z.string().min(2, 'Medication name required').max(200),
   dosage: z.string().min(1, 'Dosage required').max(200),
   issue_date: z.string().min(1, 'Issue date required'),
@@ -19,31 +19,20 @@ const prescribeSchema = z.object({
 
 function IssueModal({ doctorId, onClose }) {
   const qc = useQueryClient()
-  const [patientResults, setPatientResults] = useState([])
-  const [selectedPatient, setSelectedPatient] = useState(null)
 
-  const { register, handleSubmit, setValue, formState: { errors } } = useForm({
+  const { register, handleSubmit, formState: { errors } } = useForm({
     resolver: zodResolver(prescribeSchema),
     defaultValues: { issue_date: new Date().toISOString().split('T')[0] },
   })
 
-  async function searchPatients(query) {
-    if (!query || query.length < 2) return
-    const res = await patientsApi.searchPatientsByName(query)
-    if (res.error) {
-      toast.error('Search failed.')
-      setPatientResults([])
-      return
-    }
-    setPatientResults(res.data ?? [])
-  }
-
-  function pickPatient(p) {
-    setSelectedPatient(p)
-    setValue('patient_id', p.id)
-    setValue('patient_search', p.users?.full_name)
-    setPatientResults([])
-  }
+  const { data: patientUsers, isLoading: loadingPatients } = useQuery({
+    queryKey: queryKeys.patientUsers,
+    queryFn: async () => {
+      const res = await usersApi.listPatientUsers()
+      if (res.error) throw new Error(res.details)
+      return res.data
+    },
+  })
 
   const { mutate, isPending } = useMutation({
     mutationFn: async (data) => {
@@ -75,32 +64,19 @@ function IssueModal({ doctorId, onClose }) {
             <button onClick={onClose} className="text-gray-400 hover:text-gray-600 text-xl leading-none">✕</button>
           </div>
           <form onSubmit={handleSubmit(mutate)} className="space-y-4">
-            <input type="hidden" {...register('patient_id')} />
-            <div className="relative">
+            <div>
               <label className="label">Patient</label>
-              <input
-                {...register('patient_search')}
-                className="input"
-                placeholder="Type patient name…"
-                onChange={e => {
-                  setValue('patient_search', e.target.value)
-                  searchPatients(e.target.value)
-                }}
-                autoComplete="off"
-              />
+              <select {...register('patient_id')} className="input" defaultValue="">
+                <option value="" disabled>
+                  {loadingPatients ? 'Loading patients…' : 'Select a patient…'}
+                </option>
+                {patientUsers?.map(p => (
+                  <option key={p.patient_id} value={p.patient_id}>
+                    {p.full_name}
+                  </option>
+                ))}
+              </select>
               {errors.patient_id && <p className="text-red-500 text-xs mt-1">{errors.patient_id.message}</p>}
-              {patientResults.length > 0 && (
-                <ul className="absolute z-10 w-full bg-white border border-gray-200 rounded-lg shadow-lg mt-1">
-                  {patientResults.map(p => (
-                    <li key={p.id} onClick={() => pickPatient(p)} className="px-3 py-2 text-sm hover:bg-brand-50 cursor-pointer text-gray-800">
-                      {p.users?.full_name}
-                    </li>
-                  ))}
-                </ul>
-              )}
-              {selectedPatient && (
-                <p className="text-xs text-green-600 mt-1">✓ Selected: {selectedPatient.users?.full_name}</p>
-              )}
             </div>
             <div>
               <label className="label">Medication</label>

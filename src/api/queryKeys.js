@@ -1,6 +1,7 @@
 export const queryKeys = {
   users: ['users'],
   doctorsList: ['doctors-list'],
+  patientUsers: ['patient-users'],
   patients: ['patients'],
   patientSelf: (userId) => ['patient-self', userId],
   patientSelfId: (userId) => ['patient-self-id', userId],

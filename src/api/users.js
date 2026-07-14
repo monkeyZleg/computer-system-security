@@ -26,6 +26,30 @@ export async function listUsers(viewer) {
   return { status: 200, data: res.data.map(u => ({ ...u, role: u.role.description })) }
 }
 
+// Fetches users left-joined with role, keeps only patient accounts, and pulls in
+// their patients-record id (prescriptions reference patients.id, not users.id).
+export async function listPatientUsers() {
+  const res = await supabase
+    .from('users')
+    .select('id, full_name, role:role(description), patients:patients!user_id(id)')
+    .order('full_name')
+
+  if (res.error) {
+    console.error('Failed to list patient users:', res.error)
+    return { status: 500, error: 'Internal Server Error', details: res.error.message }
+  }
+
+  const patients = res.data
+    .filter(u => u.role?.description === 'patient')
+    .map(u => {
+      const rec = Array.isArray(u.patients) ? u.patients[0] : u.patients
+      return { user_id: u.id, patient_id: rec?.id ?? null, full_name: u.full_name }
+    })
+    .filter(p => p.patient_id)
+
+  return { status: 200, data: patients }
+}
+
 export async function listDoctors() {
   const res = await supabase
     .from('users')

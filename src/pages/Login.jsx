@@ -115,39 +115,6 @@ export default function Login() {
             <Link to="/register" className="text-brand-600 font-medium hover:underline">Create an account</Link>
           </p>
         </div>
-
-        {/* Credential spray simulation panel */}
-        <div className="card mt-4">
-          <div className="flex items-center justify-between mb-3">
-            <div>
-              <p className="text-sm font-semibold text-gray-800">🤖 Password Spray Attack Simulation</p>
-              <p className="text-xs text-gray-500">Attacker tests common passwords across accounts — no lockout stops them.</p>
-            </div>
-            <button onClick={simulateSpray} disabled={sprayActive} className="btn-danger text-xs px-3 py-1.5">
-              Run Demo
-            </button>
-          </div>
-          <div className="space-y-1.5">
-            {SPRAY_ATTEMPTS.map((a, i) => (
-              <div
-                key={i}
-                className={`flex items-center gap-3 p-2 rounded text-xs font-mono transition-all ${
-                  sprayActive && i <= sprayIdx ? 'bg-red-50 opacity-100' : 'bg-gray-50 opacity-40'
-                }`}
-              >
-                <span className={`w-4 h-4 rounded-full flex items-center justify-center text-white text-xs ${
-                  sprayActive && i <= sprayIdx ? 'bg-red-500' : 'bg-gray-300'
-                }`}>✗</span>
-                <span className="text-gray-700">{a.user}</span>
-                <span className="text-gray-400">:</span>
-                <span className="text-red-600">{a.pass}</span>
-                {sprayActive && i <= sprayIdx && (
-                  <span className="ml-auto text-red-500">→ Attempt {i + 1} sent — no lockout</span>
-                )}
-              </div>
-            ))}
-          </div>
-        </div>
       </div>
     </div>
   )

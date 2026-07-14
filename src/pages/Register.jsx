@@ -19,7 +19,7 @@ export default function Register() {
   const navigate = useNavigate()
   const { signUp } = useAuth()
   const [loading, setLoading] = useState(false)
-  const [exposedRecord, setExposedRecord] = useState(null)
+  // const [exposedRecord, setExposedRecord] = useState(null)
 
   const { register, handleSubmit, watch, formState: { errors } } = useForm({
     resolver: zodResolver(schema),
@@ -45,60 +45,22 @@ export default function Register() {
       })
       if (patRes.error) throw new Error(patRes.details)
 
-      setExposedRecord({
-        id: newUser.id ?? 'a3f7b2c1-...',
-        full_name: data.full_name,
-        email: data.email,
-        password: data.password,
-        phone_number: data.phone_number || null,
-        role: 1,
-        created_at: new Date().toISOString(),
-      })
+      // setExposedRecord({
+      //   id: newUser.id ?? 'a3f7b2c1-...',
+      //   full_name: data.full_name,
+      //   email: data.email,
+      //   password: data.password,
+      //   phone_number: data.phone_number || null,
+      //   role: 1,
+      //   created_at: new Date().toISOString(),
+      // })
 
-      toast.success('Account created — see what was stored below!')
+      toast.success('Account created')
     } catch (err) {
       toast.error(err?.message?.includes('duplicate') ? 'An account with this email already exists.' : 'Registration failed. Please try again.')
     } finally {
       setLoading(false)
     }
-  }
-
-  if (exposedRecord) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-brand-50 to-blue-100 p-4">
-        <div className="w-full max-w-lg">
-          <div className="text-center mb-6">
-            <div className="inline-flex items-center justify-center w-16 h-16 bg-brand-600 rounded-2xl mb-4">
-              <span className="text-white text-2xl font-bold">H</span>
-            </div>
-          </div>
-
-          <div className="card">
-            <p className="text-sm font-semibold text-gray-700 mb-3">What was inserted into the database:</p>
-            <div className="bg-gray-900 rounded-lg p-4 text-xs font-mono space-y-1 overflow-x-auto">
-              <p className="text-green-400">INSERT INTO users (full_name, email, <span className="text-red-400 font-bold">password</span>, phone_number, role)</p>
-              <p className="text-green-400">VALUES (</p>
-              <p className="text-blue-300 pl-4">&apos;{exposedRecord.full_name}&apos;,</p>
-              <p className="text-blue-300 pl-4">&apos;{exposedRecord.email}&apos;,</p>
-              <p className="text-red-400 font-bold pl-4">&apos;{exposedRecord.password}&apos;  <span className="text-yellow-400">-- ← stored exactly as typed!</span></p>
-              <p className="text-blue-300 pl-4">{exposedRecord.phone_number ? `'${exposedRecord.phone_number}'` : 'NULL'},</p>
-              <p className="text-blue-300 pl-4">1  <span className="text-gray-500">-- role_id for &apos;patient&apos;</span></p>
-              <p className="text-green-400">);</p>
-            </div>
-
-            <div className="mt-4 p-3 bg-orange-50 border border-orange-200 rounded-lg text-xs">
-              <p className="font-semibold text-orange-800 mb-1">What should happen instead:</p>
-              <p className="text-orange-700 font-mono">password = bcrypt.hash(&apos;{exposedRecord.password}&apos;, 12)</p>
-              <p className="text-orange-600 mt-1">→ <span className="font-mono">$2b$12$KIXt9bN...Qz7Vl</span> (unreadable 60-char hash)</p>
-            </div>
-
-            <button onClick={() => navigate('/login')} className="btn-primary w-full mt-4">
-              Continue to Login
-            </button>
-          </div>
-        </div>
-      </div>
-    )
   }
 
   return (
