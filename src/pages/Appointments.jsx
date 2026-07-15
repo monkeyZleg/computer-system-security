@@ -9,6 +9,7 @@ import * as patientsApi from '../api/patients'
 import * as appointmentsApi from '../api/appointments'
 import { queryKeys } from '../api/queryKeys'
 import { useAuth } from '../context/AuthContext'
+import { seqId } from '../lib/displayId'
 
 const bookSchema = z.object({
   doctor_id: z.string().uuid('Please select a doctor'),
@@ -180,11 +181,11 @@ export default function Appointments() {
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-50">
-              {appointments?.map(apt => (
+              {appointments?.map((apt, i) => (
                 <tr key={apt.id} className="hover:bg-gray-50 transition-colors">
                   <td className="px-4 py-3">
-                    <span className="font-mono text-xs bg-red-100 text-red-700 px-2 py-0.5 rounded font-bold">
-                      APT-{apt.id}
+                    <span className="font-mono text-xs bg-gray-100 text-gray-700 px-2 py-0.5 rounded font-bold">
+                      {seqId(i, 'APT')}
                     </span>
                   </td>
                   {!isPatient && (

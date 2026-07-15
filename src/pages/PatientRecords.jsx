@@ -4,6 +4,7 @@ import { useQuery } from '@tanstack/react-query'
 import * as patientsApi from '../api/patients'
 import { queryKeys } from '../api/queryKeys'
 import { useAuth } from '../context/AuthContext'
+import { seqId } from '../lib/displayId'
 
 function StaffRecordsView() {
   const [search, setSearch] = useState('')
@@ -50,11 +51,11 @@ function StaffRecordsView() {
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-50">
-              {filtered?.map(p => (
+              {filtered?.map((p, i) => (
                 <tr key={p.id} className="hover:bg-gray-50 transition-colors">
                   <td className="px-4 py-3">
-                    <span className="font-mono text-xs bg-red-100 text-red-700 px-2 py-0.5 rounded font-bold">
-                      #{p.id}
+                    <span className="font-mono text-xs bg-gray-100 text-gray-700 px-2 py-0.5 rounded font-bold">
+                      #{seqId(i)}
                     </span>
                   </td>
                   <td className="px-4 py-3 font-medium text-gray-800">{p.users?.full_name}</td>

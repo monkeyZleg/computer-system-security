@@ -9,6 +9,7 @@ import * as usersApi from '../api/users'
 import * as prescriptionsApi from '../api/prescriptions'
 import { queryKeys } from '../api/queryKeys'
 import { useAuth } from '../context/AuthContext'
+import { seqId } from '../lib/displayId'
 
 const prescribeSchema = z.object({
   patient_id: z.string().uuid('Please select a patient'),
@@ -159,12 +160,12 @@ export default function Prescriptions() {
       ) : (
         <>
           <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4 mb-6">
-            {prescriptions?.map(rx => (
+            {prescriptions?.map((rx, i) => (
               <div key={rx.id} className="card">
                 <div className="flex items-start justify-between mb-3">
                   <div>
                     <div className="flex items-center gap-2 mb-1">
-                      <span className="font-mono text-xs bg-yellow-100 text-yellow-700 px-2 py-0.5 rounded font-bold">RX-{rx.id}</span>
+                      <span className="font-mono text-xs bg-yellow-100 text-yellow-700 px-2 py-0.5 rounded font-bold">{seqId(i, 'RX')}</span>
                     </div>
                     <p className="font-semibold text-gray-800">{rx.medication}</p>
                     {!isPatient && (
