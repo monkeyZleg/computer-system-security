@@ -1,7 +1,7 @@
 import { createContext, useContext, useState } from 'react'
 import * as authApi from '../api/auth'
 import * as usersApi from '../api/users'
-import { setSessionPassword, clearSessionKey } from '../lib/crypto'
+import { setSessionAuth, clearSessionKey } from '../lib/crypto'
 
 const AuthContext = createContext(null)
 const STORAGE_KEY = 'hpms.auth'
@@ -26,9 +26,11 @@ export function AuthProvider({ children }) {
   async function signIn(email, password) {
     const res = await authApi.signIn({ email, password })
     if (res.error) throw new Error(res.details)
-    setSessionPassword(password)
-    persist(res.data)
-    return res.data
+    // The data_key stays in sessionStorage only — never in the localStorage profile.
+    const { data_key, ...user } = res.data
+    setSessionAuth({ userId: user.id, dataKey: data_key })
+    persist(user)
+    return user
   }
 
   async function signUp(fields) {
@@ -36,8 +38,9 @@ export function AuthProvider({ children }) {
     if (res.error) throw new Error(res.details)
     // Set before returning: callers (e.g. patient self-registration) make
     // encrypted calls right after signUp, before any signIn.
-    setSessionPassword(fields.password)
-    return res.data
+    const { data_key, ...user } = res.data
+    setSessionAuth({ userId: user.id, dataKey: data_key })
+    return user
   }
 
   async function signOut() {

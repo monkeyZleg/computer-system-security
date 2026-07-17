@@ -1,66 +1,64 @@
 // Client-side decryption for AES-GCM payloads returned by encrypted Edge Functions.
 //
-// The Edge Function encrypts the JSON response so it travels the wire as
-// ciphertext (visible as ciphertext in the browser Network tab). Instead of a
-// hardcoded shared key, the AES-GCM key is derived from the signed-in account's
-// password with PBKDF2 — the client derives it here, the Edge Function derives
-// the same key server-side from the password it's sent, and the two must match
-// for decryption to succeed.
+// The Edge Function encrypts the JSON response with the signed-in account's
+// data_key — a random per-user AES-256 key stored in users.data_key. The key
+// crosses the wire exactly once, in the authenticate_user/register_user response
+// at sign-in (over TLS); after that, requests carry only the caller's user id
+// and the Edge Function looks the key (and the caller's role) up in the
+// database itself. No password ever rides along with API calls.
 //
-// NOTE: sending the plaintext password with every request so the server can
-// re-derive the key is only acceptable for this classroom demonstration — a
-// production system would never do this.
-const SALT_B64 = 'e/ghT9ctg3Uwg0zpNvtzpg=='
-const PBKDF2_ITERATIONS = 100000
+// The key is kept in sessionStorage so it survives a page refresh; it is
+// cleared on sign-out and when the tab closes.
+const STORAGE_KEY = 'hpms.sessionAuth'
+
+function readStored() {
+  try {
+    const raw = sessionStorage.getItem(STORAGE_KEY)
+    return raw ? JSON.parse(raw) : null
+  } catch {
+    return null
+  }
+}
 
 function b64ToBytes(b64) {
   return Uint8Array.from(atob(b64), (c) => c.charCodeAt(0))
 }
 
-// Derives an AES-256-GCM decrypt key from the account password via PBKDF2.
-// Must be called (and produce the same key) before decryptPayload can succeed.
-async function deriveKeyFromPassword(password) {
-  const baseKey = await crypto.subtle.importKey(
-    'raw',
-    new TextEncoder().encode(password),
-    'PBKDF2',
-    false,
-    ['deriveKey'],
-  )
-  return crypto.subtle.deriveKey(
-    { name: 'PBKDF2', salt: b64ToBytes(SALT_B64), iterations: PBKDF2_ITERATIONS, hash: 'SHA-256' },
-    baseKey,
-    { name: 'AES-GCM', length: 256 },
-    false,
-    ['decrypt'],
-  )
-}
-
-let sessionPassword = null
+let session = readStored()
 let keyPromise = null
 
-// Call after sign-in/sign-up with the plaintext password so decryptPayload has
-// something to derive the key from. Call clearSessionKey() on sign-out.
-export function setSessionPassword(password) {
-  sessionPassword = password
+// Call after sign-in/sign-up with the account id and its data_key so
+// decryptPayload can import the key. Call clearSessionKey() on sign-out.
+export function setSessionAuth({ userId, dataKey }) {
+  session = { userId, dataKey }
+  sessionStorage.setItem(STORAGE_KEY, JSON.stringify(session))
   keyPromise = null
 }
 
-export function getSessionPassword() {
-  return sessionPassword
+// The signed-in user's id — sent with every encrypted call so the Edge
+// Function can look up the caller's role and key server-side.
+export function getSessionUserId() {
+  return session?.userId ?? null
 }
 
 export function clearSessionKey() {
-  sessionPassword = null
+  session = null
+  sessionStorage.removeItem(STORAGE_KEY)
   keyPromise = null
 }
 
 function getKey() {
-  if (!sessionPassword) {
-    return Promise.reject(new Error('No account password set for this session — sign in again.'))
+  if (!session?.dataKey) {
+    return Promise.reject(new Error('No session key for this session — sign in again.'))
   }
   if (!keyPromise) {
-    keyPromise = deriveKeyFromPassword(sessionPassword)
+    keyPromise = crypto.subtle.importKey(
+      'raw',
+      b64ToBytes(session.dataKey),
+      { name: 'AES-GCM' },
+      false,
+      ['decrypt'],
+    )
   }
   return keyPromise
 }

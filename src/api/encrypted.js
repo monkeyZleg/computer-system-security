@@ -1,17 +1,17 @@
 import { supabase } from '../lib/supabase'
-import { decryptPayload, getSessionPassword } from '../lib/crypto'
+import { decryptPayload, getSessionUserId } from '../lib/crypto'
 
 // Shared client for the *-encrypted Edge Functions. Each function runs the query
-// server-side, AES-GCM encrypts the JSON result, and returns { iv, data } so the
-// response travels the wire as ciphertext (you see ciphertext in the Network tab).
-// We decrypt here with Web Crypto after it arrives. The encryption key is derived
-// from the account password, so it rides along on every call for the Edge
-// Function to derive the matching key with.
+// server-side, AES-GCM encrypts the JSON result with the caller's per-user
+// data_key, and returns { iv, data } so the response travels the wire as
+// ciphertext. The request carries only the signed-in user's id — the Edge
+// Function looks up the caller's role and encryption key in the database, so
+// authorization can't be spoofed from the client and no secret is sent.
 //
-//   invokeEncrypted('patients-encrypted', { op: 'list', viewer }, { context: 'list patients' })
+//   invokeEncrypted('patients-encrypted', { op: 'list' }, { context: 'list patients' })
 export async function invokeEncrypted(fn, body, { context, successStatus = 200 } = {}) {
   const { data: encrypted, error } = await supabase.functions.invoke(fn, {
-    body: { ...body, password: getSessionPassword() },
+    body: { ...body, userId: getSessionUserId() },
   })
 
   if (error || !encrypted) {

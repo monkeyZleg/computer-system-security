@@ -6,10 +6,12 @@ import { invokeEncrypted } from './encrypted'
 // as ciphertext. invokeEncrypted decrypts it after it arrives. Ownership checks run
 // server-side inside the function; the client-side guards below are a first line only.
 
-export async function listAppointments({ role, userId, patientId }) {
+// The server scopes the list by the caller's database role: patients see their
+// own appointments, doctors their schedule, admins/nurses everything.
+export async function listAppointments() {
   return invokeEncrypted(
     'appointments-encrypted',
-    { op: 'list', viewer: { role, userId, patientId } },
+    { op: 'list' },
     { context: 'list appointments' },
   )
 }
@@ -29,7 +31,7 @@ export async function updateAppointmentStatus(id, status, viewer) {
   }
   return invokeEncrypted(
     'appointments-encrypted',
-    { op: 'updateStatus', id, status, viewer },
+    { op: 'updateStatus', id, status },
     { context: 'update appointment status' },
   )
 }
@@ -66,7 +68,7 @@ export async function deleteAppointment(id, viewer) {
   }
   return invokeEncrypted(
     'appointments-encrypted',
-    { op: 'delete', id, viewer },
+    { op: 'delete', id },
     { context: 'delete appointment' },
   )
 }

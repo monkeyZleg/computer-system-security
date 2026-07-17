@@ -5,13 +5,15 @@ const STAFF_ROLES = ['doctor', 'nurse', 'admin']
 
 // All patient CRUD goes through the `patients-encrypted` Edge Function: the server
 // runs the query, AES-GCM encrypts the JSON, and the response travels the wire as
-// ciphertext. invokeEncrypted decrypts it after it arrives.
+// ciphertext. invokeEncrypted decrypts it after it arrives. The request body only
+// carries the signed-in user's id — the server looks up the caller's role itself,
+// so the viewer checks below are a first-line UX guard, not the enforcement.
 
 export async function listPatients(viewer) {
   if (!viewer || !STAFF_ROLES.includes(viewer.role)) {
     return forbidden('Only staff can list patient records.')
   }
-  return invokeEncrypted('patients-encrypted', { op: 'list', viewer }, { context: 'list patients' })
+  return invokeEncrypted('patients-encrypted', { op: 'list' }, { context: 'list patients' })
 }
 
 // Ownership check: patients may only fetch their own record; staff may fetch any.
@@ -19,15 +21,16 @@ export async function getPatientById(id, viewer) {
   if (viewer?.role === 'patient' && viewer.patientId !== id) {
     return forbidden('You can only view your own patient record.')
   }
-  return invokeEncrypted('patients-encrypted', { op: 'get', id, viewer }, { context: 'fetch patient record' })
+  return invokeEncrypted('patients-encrypted', { op: 'get', id }, { context: 'fetch patient record' })
 }
 
-export async function getPatientByUserId(userId) {
-  return invokeEncrypted('patients-encrypted', { op: 'getByUserId', userId }, { context: 'fetch patient record' })
+// Server-side these always resolve against the signed-in user.
+export async function getPatientByUserId() {
+  return invokeEncrypted('patients-encrypted', { op: 'getByUserId' }, { context: 'fetch patient record' })
 }
 
-export async function getPatientIdByUserId(userId) {
-  return invokeEncrypted('patients-encrypted', { op: 'getIdByUserId', userId }, { context: 'fetch patient id' })
+export async function getPatientIdByUserId() {
+  return invokeEncrypted('patients-encrypted', { op: 'getIdByUserId' }, { context: 'fetch patient id' })
 }
 
 export async function updatePatientRecord(patientId, { home_address, diagnosis, medical_history }, viewer) {
@@ -36,7 +39,7 @@ export async function updatePatientRecord(patientId, { home_address, diagnosis, 
   }
   return invokeEncrypted(
     'patients-encrypted',
-    { op: 'update', patientId, home_address, diagnosis, medical_history, viewer },
+    { op: 'update', patientId, home_address, diagnosis, medical_history },
     { context: 'update patient record' },
   )
 }

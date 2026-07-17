@@ -14,7 +14,7 @@ export async function listUsers(viewer) {
   if (!viewer || viewer.role !== 'admin') {
     return forbidden('Only admins can view all user accounts.')
   }
-  return invokeEncrypted('users-encrypted', { op: 'list', viewer }, { context: 'list users' })
+  return invokeEncrypted('users-encrypted', { op: 'list' }, { context: 'list users' })
 }
 
 // Returns patient-role users with their patients-record id (prescriptions reference
@@ -33,7 +33,7 @@ export async function createStaffUser({ full_name, email, password, role, phone_
   }
   return invokeEncrypted(
     'users-encrypted',
-    { op: 'create', full_name, email, password, role, phone_number, viewer },
+    { op: 'create', full_name, email, password, role, phone_number },
     { context: 'create staff user', successStatus: 201 },
   )
 }
@@ -44,7 +44,7 @@ export async function updateUserRole(id, roleDescription, viewer) {
   }
   return invokeEncrypted(
     'users-encrypted',
-    { op: 'updateRole', id, roleDescription, viewer },
+    { op: 'updateRole', id, roleDescription },
     { context: 'update user role' },
   )
 }
@@ -60,5 +60,5 @@ export async function deleteUser(id, viewer) {
   if (!viewer || viewer.role !== 'admin') {
     return forbidden('Only admins can delete user accounts.')
   }
-  return invokeEncrypted('users-encrypted', { op: 'delete', id, viewer }, { context: 'delete user' })
+  return invokeEncrypted('users-encrypted', { op: 'delete', id }, { context: 'delete user' })
 }

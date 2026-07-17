@@ -5,10 +5,12 @@ import { invokeEncrypted } from './encrypted'
 // the server runs the query, AES-GCM encrypts the JSON, and the response travels
 // the wire as ciphertext. invokeEncrypted decrypts it after it arrives.
 
-export async function listPrescriptions({ role, userId, patientId }) {
+// The server scopes the list by the caller's database role: patients see their
+// own prescriptions, doctors the ones they issued, admins everything.
+export async function listPrescriptions() {
   return invokeEncrypted(
     'prescriptions-encrypted',
-    { op: 'list', viewer: { role, userId, patientId } },
+    { op: 'list' },
     { context: 'list prescriptions' },
   )
 }
@@ -19,7 +21,7 @@ export async function issuePrescription({ patient_id, doctor_id, medication, dos
   }
   return invokeEncrypted(
     'prescriptions-encrypted',
-    { op: 'create', viewer, patient_id, doctor_id, medication, dosage, issue_date },
+    { op: 'create', patient_id, doctor_id, medication, dosage, issue_date },
     { context: 'issue prescription', successStatus: 201 },
   )
 }
@@ -39,7 +41,7 @@ export async function deletePrescription(id, viewer) {
   }
   return invokeEncrypted(
     'prescriptions-encrypted',
-    { op: 'delete', id, viewer },
+    { op: 'delete', id },
     { context: 'delete prescription' },
   )
 }
