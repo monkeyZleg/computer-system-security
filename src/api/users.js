@@ -1,104 +1,56 @@
-import { supabase } from '../lib/supabase'
-import { toResult, forbidden } from './client'
+import { forbidden } from './client'
+import { invokeEncrypted } from './encrypted'
+
+// All user/role reads and writes go through the `users-encrypted` Edge Function: the
+// server runs the query (and any shaping, e.g. flattening role.description), AES-GCM
+// encrypts the JSON, and the response travels the wire as ciphertext. invokeEncrypted
+// decrypts it after it arrives.
 
 export async function listRoles() {
-  const res = await supabase.from('role').select('id, description').order('id')
-  return toResult(res, { context: 'list roles' })
-}
-
-async function roleIdFromDescription(description) {
-  return await supabase.from('role').select('id').eq('description', description).single()
+  return invokeEncrypted('users-encrypted', { op: 'listRoles' }, { context: 'list roles' })
 }
 
 export async function listUsers(viewer) {
   if (!viewer || viewer.role !== 'admin') {
     return forbidden('Only admins can view all user accounts.')
   }
-  const res = await supabase
-    .from('users')
-    .select('id, full_name, email, phone_number, created_at, role:role(description)')
-    .order('created_at', { ascending: false })
-
-  if (res.error) {
-    console.error('Failed to list users:', res.error)
-    return { status: 500, error: 'Internal Server Error', details: res.error.message }
-  }
-  return { status: 200, data: res.data.map(u => ({ ...u, role: u.role.description })) }
+  return invokeEncrypted('users-encrypted', { op: 'list', viewer }, { context: 'list users' })
 }
 
-// Fetches users left-joined with role, keeps only patient accounts, and pulls in
-// their patients-record id (prescriptions reference patients.id, not users.id).
+// Returns patient-role users with their patients-record id (prescriptions reference
+// patients.id, not users.id). Filtering/shaping happens server-side.
 export async function listPatientUsers() {
-  const res = await supabase
-    .from('users')
-    .select('id, full_name, role:role(description), patients:patients!user_id(id)')
-    .order('full_name')
-
-  if (res.error) {
-    console.error('Failed to list patient users:', res.error)
-    return { status: 500, error: 'Internal Server Error', details: res.error.message }
-  }
-
-  const patients = res.data
-    .filter(u => u.role?.description === 'patient')
-    .map(u => {
-      const rec = Array.isArray(u.patients) ? u.patients[0] : u.patients
-      return { user_id: u.id, patient_id: rec?.id ?? null, full_name: u.full_name }
-    })
-    .filter(p => p.patient_id)
-
-  return { status: 200, data: patients }
+  return invokeEncrypted('users-encrypted', { op: 'listPatientUsers' }, { context: 'list patient users' })
 }
 
 export async function listDoctors() {
-  const res = await supabase
-    .from('users')
-    .select('id, full_name, role:role!inner(description)')
-    .eq('role.description', 'doctor')
-    .order('full_name')
-  return toResult(res, { context: 'list doctors' })
+  return invokeEncrypted('users-encrypted', { op: 'listDoctors' }, { context: 'list doctors' })
 }
 
 export async function createStaffUser({ full_name, email, password, role, phone_number }, viewer) {
   if (!viewer || viewer.role !== 'admin') {
     return forbidden('Only admins can create staff accounts.')
   }
-  const res = await supabase
-    .rpc('register_user', {
-      p_full_name: full_name,
-      p_email: email,
-      p_password: password,
-      p_phone_number: phone_number || null,
-      p_role: role,
-    })
-    .single()
-  return toResult(res, { successStatus: 201, context: 'create staff user' })
+  return invokeEncrypted(
+    'users-encrypted',
+    { op: 'create', full_name, email, password, role, phone_number, viewer },
+    { context: 'create staff user', successStatus: 201 },
+  )
 }
 
 export async function updateUserRole(id, roleDescription, viewer) {
   if (!viewer || viewer.role !== 'admin') {
     return forbidden('Only admins can change user roles.')
   }
-  const roleRes = await roleIdFromDescription(roleDescription)
-  if (roleRes.error) {
-    console.error('Failed to resolve role id:', roleRes.error)
-    return { status: 500, error: 'Internal Server Error', details: roleRes.error.message }
-  }
-
-  const res = await supabase.from('users').update({ role: roleRes.data.id }).eq('id', id)
-  return toResult(res, { context: 'update user role' })
+  return invokeEncrypted(
+    'users-encrypted',
+    { op: 'updateRole', id, roleDescription, viewer },
+    { context: 'update user role' },
+  )
 }
 
 export async function countStaff() {
-  const rolesRes = await listRoles()
-  if (rolesRes.error) return rolesRes
-
-  const ids = rolesRes.data.filter(r => r.description === 'doctor' || r.description === 'nurse').map(r => r.id)
-  const res = await supabase
-    .from('users')
-    .select('id', { count: 'exact', head: true })
-    .in('role', ids)
-  return toResult(res, { context: 'count staff', data: res.count })
+  return invokeEncrypted('users-encrypted', { op: 'countStaff' }, { context: 'count staff' })
 }
 
 // Exported for completeness (full CRUD); intentionally not wired into any UI —
@@ -108,6 +60,5 @@ export async function deleteUser(id, viewer) {
   if (!viewer || viewer.role !== 'admin') {
     return forbidden('Only admins can delete user accounts.')
   }
-  const res = await supabase.from('users').delete().eq('id', id)
-  return toResult(res, { context: 'delete user' })
+  return invokeEncrypted('users-encrypted', { op: 'delete', id, viewer }, { context: 'delete user' })
 }

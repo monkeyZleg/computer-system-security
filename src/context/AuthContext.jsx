@@ -1,6 +1,7 @@
 import { createContext, useContext, useState } from 'react'
 import * as authApi from '../api/auth'
 import * as usersApi from '../api/users'
+import { setSessionPassword, clearSessionKey } from '../lib/crypto'
 
 const AuthContext = createContext(null)
 const STORAGE_KEY = 'hpms.auth'
@@ -25,6 +26,7 @@ export function AuthProvider({ children }) {
   async function signIn(email, password) {
     const res = await authApi.signIn({ email, password })
     if (res.error) throw new Error(res.details)
+    setSessionPassword(password)
     persist(res.data)
     return res.data
   }
@@ -32,11 +34,15 @@ export function AuthProvider({ children }) {
   async function signUp(fields) {
     const res = await authApi.signUp(fields)
     if (res.error) throw new Error(res.details)
+    // Set before returning: callers (e.g. patient self-registration) make
+    // encrypted calls right after signUp, before any signIn.
+    setSessionPassword(fields.password)
     return res.data
   }
 
   async function signOut() {
     localStorage.removeItem(STORAGE_KEY)
+    clearSessionKey()
     setProfile(null)
   }
 

@@ -11,6 +11,10 @@ export async function signUp({ full_name, email, password, phone_number }) {
       p_role: 'patient',
     })
     .single()
+  // 23505 = unique_violation (users_email_key): surface it instead of a generic 500.
+  if (res.error?.code === '23505') {
+    return { status: 409, error: 'Conflict', details: 'This email is already used by another account. Please use another email to create your new account.' }
+  }
   return toResult(res, { successStatus: 201, context: 'register user' })
 }
 

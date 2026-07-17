@@ -1,32 +1,13 @@
-import { supabase } from '../lib/supabase'
 import { forbidden } from './client'
-import { decryptPayload } from '../lib/crypto'
+import { invokeEncrypted } from './encrypted'
 
 // All prescription CRUD goes through the `prescriptions-encrypted` Edge Function:
 // the server runs the query, AES-GCM encrypts the JSON, and the response travels
-// the wire as ciphertext. We decrypt here with Web Crypto after it arrives.
-async function invokeEncrypted(body, { context, successStatus = 200 } = {}) {
-  const { data: encrypted, error } = await supabase.functions.invoke(
-    'prescriptions-encrypted',
-    { body },
-  )
-
-  if (error || !encrypted) {
-    console.error(context ? `Failed to ${context}:` : 'API error:', error)
-    return { status: 500, error: 'Internal Server Error', details: 'Something went wrong. Please try again later.' }
-  }
-
-  try {
-    const data = await decryptPayload(encrypted)
-    return { status: successStatus, data }
-  } catch (e) {
-    console.error(`Failed to decrypt (${context}):`, e)
-    return { status: 500, error: 'Internal Server Error', details: 'Could not decrypt the response.' }
-  }
-}
+// the wire as ciphertext. invokeEncrypted decrypts it after it arrives.
 
 export async function listPrescriptions({ role, userId, patientId }) {
   return invokeEncrypted(
+    'prescriptions-encrypted',
     { op: 'list', viewer: { role, userId, patientId } },
     { context: 'list prescriptions' },
   )
@@ -37,6 +18,7 @@ export async function issuePrescription({ patient_id, doctor_id, medication, dos
     return forbidden('Only the treating doctor can issue this prescription.')
   }
   return invokeEncrypted(
+    'prescriptions-encrypted',
     { op: 'create', viewer, patient_id, doctor_id, medication, dosage, issue_date },
     { context: 'issue prescription', successStatus: 201 },
   )
@@ -44,6 +26,7 @@ export async function issuePrescription({ patient_id, doctor_id, medication, dos
 
 export async function getRecentPrescriptionsForPatient(patientId, limit = 5) {
   return invokeEncrypted(
+    'prescriptions-encrypted',
     { op: 'recent', patientId, limit },
     { context: 'fetch recent prescriptions' },
   )
@@ -55,6 +38,7 @@ export async function deletePrescription(id, viewer) {
     return forbidden('Only admins can delete prescriptions.')
   }
   return invokeEncrypted(
+    'prescriptions-encrypted',
     { op: 'delete', id, viewer },
     { context: 'delete prescription' },
   )
