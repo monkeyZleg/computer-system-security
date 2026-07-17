@@ -48,7 +48,7 @@ export default function Login() {
       <div className="absolute -top-40 -left-40 w-[36rem] h-[36rem] rounded-full bg-blue-900/30 blur-sm pointer-events-none" />
       <div className="absolute -bottom-48 -right-32 w-[40rem] h-[40rem] rounded-full bg-blue-500/20 blur-sm pointer-events-none" />
 
-      <div className="relative w-full max-w-sm bg-white rounded-3xl shadow-2xl px-8 sm:px-10 py-12 min-h-[38rem] flex flex-col">
+      <div className="relative w-full max-w-sm bg-white rounded-3xl shadow-2xl px-8 sm:px-10 py-12 min-h-[28rem] flex flex-col">
         <h1 className="text-4xl font-extrabold text-gray-700 text-center mb-10">Login</h1>
 
         <form onSubmit={handleSubmit(onSubmit)} className="space-y-5">
@@ -105,11 +105,11 @@ export default function Login() {
             </div>
             {errors.password && <p className="text-red-500 text-xs mt-1 ml-4">{errors.password.message}</p>}
           </div>
-
+{/* 
           <label className="flex items-center gap-2 pl-1 text-gray-500 text-sm cursor-pointer select-none">
             <input type="checkbox" defaultChecked className="w-4 h-4 rounded accent-amber-400" />
             Remember me
-          </label>
+          </label> */}
 
           <button
             type="submit"
@@ -120,9 +120,9 @@ export default function Login() {
           </button>
         </form>
 
-        <p className="text-center text-gray-500 text-sm mt-6">
+        {/* <p className="text-center text-gray-500 text-sm mt-6">
           <Link to="/login" className="hover:underline">Forget Password</Link>
-        </p>
+        </p> */}
 
         <p className="text-center text-sm text-gray-500 mt-auto pt-10">
           Not a member?{' '}
